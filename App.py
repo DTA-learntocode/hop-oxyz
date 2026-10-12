@@ -21,7 +21,6 @@ st.markdown("""
 @st.cache_resource
 def load_ai_model():
     try:
-        # Load đúng tên file trong thư mục gốc GitHub
         model = load_model('keras_model.h5', compile=False)
         with open('labels.txt', 'r', encoding='utf-8') as f:
             class_names = [line.strip() for line in f.readlines()]
@@ -35,7 +34,6 @@ model, class_names = load_ai_model()
 st.sidebar.subheader("📷 Nguồn Dữ Liệu AI Camera")
 input_option = st.sidebar.radio("Chọn phương thức:", ["Tải ảnh chụp mô hình", "Nhập tọa độ thủ công"])
 
-# Tọa độ mặc định theo đề bài/mô hình
 coords = {
     "A": [2.0, 3.0, 1.0],  # Xanh dương (Kho hàng)
     "B": [8.0, 6.0, 4.0],  # Đỏ (Khu cứu trợ)
@@ -49,14 +47,12 @@ if input_option == "Tải ảnh chụp mô hình":
         st.sidebar.image(image, caption="Ảnh mô hình thực tế", use_container_width=True)
         
         if model is not None and class_names is not None:
-            # Xử lý ảnh đưa vào mô hình Keras/Teachable Machine
             image_resized = image.resize((224, 224))
             image_array = np.asarray(image_resized)
             normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
             data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
             data[0] = normalized_image_array
             
-            # Dự đoán
             prediction = model.predict(data)
             index = np.argmax(prediction)
             confidence_score = prediction[0][index]
@@ -90,7 +86,6 @@ with tab1:
     
     k_factor = st.slider("Hệ số tỉ lệ vectơ $k$ (Ví dụ: $\\vec{AM} = k\\cdot\\vec{AC}$)", 0.5, 3.0, 2.0, 0.5)
     
-    # Tính tọa độ M
     mx = ax + k_factor * (cx - ax)
     my = ay + k_factor * (cy - ay)
     mz = az + k_factor * (cz - az)
@@ -103,12 +98,13 @@ with tab1:
         st.metric("Khu cứu trợ B (Đỏ)", f"({bx}, {by}, {bz})")
         st.metric(f"Vị trí thả hàng M (k={k_factor})", f"({mx:.1f}, {my:.1f}, {mz:.1f})")
 
-    # Kiểm tra biểu thức tối ưu
     ma = np.linalg.norm(np.array([ax - mx, ay - my, az - mz]))
     mb = np.linalg.norm(np.array([bx - mx, by - my, bz - mz]))
     mc = np.linalg.norm(np.array([cx - mx, cy - my, cz - mz]))
     t_score = abs(ma - 2*mb - mc)
-    st.info(f"📊 **Biểu thức tối ưu $T = \vert{}MA - 2MB - MC\vert{}$ tại điểm M:** `{t_score:.2f}`")
+    
+    # Sửa lỗi cú pháp f-string bằng cách dùng cú pháp thông thường
+    st.info(f"📊 **Biểu thức tối ưu T = |MA - 2MB - MC| tại điểm M:** `{t_score:.2f}`")
 
 with tab2:
     st.subheader("🌐 Mô Hình Trực Quan Họa Oxyz 3D")
@@ -133,7 +129,6 @@ with tab2:
             name=name
         ))
 
-    # Đường bay AB và AC-M
     fig.add_trace(go.Scatter3d(
         x=[ax, bx], y=[ay, by], z=[az, bz],
         mode='lines', line=dict(color='red', width=5), name='Đường bay AB'
