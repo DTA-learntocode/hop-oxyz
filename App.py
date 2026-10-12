@@ -1,75 +1,79 @@
 import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
-import cv2
 from PIL import Image
+import tensorflow as tf
+from tensorflow.keras.models import load_model
 
+# Cấu hình trang
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Nhiệm Vụ 3 & Nhận Diện Màu Sắc",
+    page_title="Hộp Oxyz Thông Minh - Chiến Dịch Cứu Trợ",
     page_icon="🎯",
     layout="wide"
 )
 
-st.title("🎯 HỘP OXYZ THÔNG MINH - NHẬN DIỆN MÀU SẮC & NHIỆM VỤ 3")
+st.title("🎯 HỘP OXYZ THÔNG MINH - TÍCH HỢP AI & NHIỆM VỤ 3")
 st.markdown("""
-*Ứng dụng tự động quét màu **Đỏ, Xanh dương, Vàng** trên mô hình hộp Oxyz giấy, định vị các điểm chiến lược và giải quyết bài toán tối ưu Nhiệm vụ 3.*[cite: 1]
+*Ứng dụng STEM tự động phân tích không gian Oxyz, nhận diện điểm mốc qua Google Teachable Machine và giải quyết bài toán quỹ đạo cứu trợ.*
 """)
 
-# --- HÀM XỬ LÝ THỊ GIÁC MÁY TÍNH (NHẬN DIỆN MÀU SẮC ĐỎ, XANH DƯƠNG, VÀNG) ---
-def detect_coordinates_by_color(img_cv):
-    """
-    Hệ thống AI xử lý ảnh: Chuyển đổi sang hệ màu HSV để lọc ra 
-    các vị trí gắn màu Đỏ, Xanh dương, Vàng trên lưới Oxyz.
-    """
-    hsv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2HSV)
-    
-    # Dải màu HSV chuẩn trong OpenCV (có thể tinh chỉnh theo ánh sáng mô hình thực tế)
-    # 1. Màu Xanh dương (Kho hàng A)
-    lower_blue = np.array([100, 150, 50])
-    upper_blue = np.array([140, 255, 255])
-    
-    # 2. Màu Đỏ (Khu cứu trợ B)
-    lower_red1 = np.array([0, 150, 50])
-    upper_red1 = np.array([10, 255, 255])
-    
-    # 3. Màu Vàng (Trạm trung chuyển C hoặc điểm mốc)
-    lower_yellow = np.array([20, 150, 100])
-    upper_yellow = np.array([35, 255, 255])
+# --- TẢI MODEL VÀ LABELS ĐÃ ĐƯA LÊN GITHUB ---
+@st.cache_resource
+def load_ai_model():
+    try:
+        # Load đúng tên file trong thư mục gốc GitHub
+        model = load_model('keras_model.h5', compile=False)
+        with open('labels.txt', 'r', encoding='utf-8') as f:
+            class_names = [line.strip() for line in f.readlines()]
+        return model, class_names
+    except Exception as e:
+        return None, None
 
-    # Tìm kiếm tâm các contour màu (mô phỏng tọa độ tự động từ mô hình)
-    # Nếu chưa bắt được, hệ thống sẽ lấy giá trị tiêu chuẩn theo đề bài làm mặc định
-    detected = {
-        "A": [2.0, 3.0, 1.0],  # Xanh dương
-        "B": [8.0, 6.0, 4.0],  # Đỏ
-        "C": [5.0, 1.0, 3.0],  # Vàng
-    }
-    return detected
+model, class_names = load_ai_model()
 
 # --- GIAO DIỆN TẢI ẢNH HOẶC CAMERA ---
-st.sidebar.subheader("📷 AI Camera Nhận Diện Màu Sắc")
-input_option = st.sidebar.radio("Nguồn đầu vào:", ["Tải ảnh chụp mô hình giấy", "Nhập tọa độ thủ công (dự phòng)"])
+st.sidebar.subheader("📷 Nguồn Dữ Liệu AI Camera")
+input_option = st.sidebar.radio("Chọn phương thức:", ["Tải ảnh chụp mô hình", "Nhập tọa độ thủ công"])
 
-coords = {"A": [2.0, 3.0, 1.0], "B": [8.0, 6.0, 4.0], "C": [5.0, 1.0, 3.0]}
+# Tọa độ mặc định theo đề bài/mô hình
+coords = {
+    "A": [2.0, 3.0, 1.0],  # Xanh dương (Kho hàng)
+    "B": [8.0, 6.0, 4.0],  # Đỏ (Khu cứu trợ)
+    "C": [5.0, 1.0, 3.0]   # Vàng (Trạm trung chuyển)
+}
 
-if input_option == "Tải ảnh chụp mô hình giấy":
-    uploaded_file = st.sidebar.file_uploader("Tải ảnh chụp (Thấy rõ ghim Đỏ, Xanh, Vàng)", type=["jpg", "png", "jpeg"])
+if input_option == "Tải ảnh chụp mô hình":
+    uploaded_file = st.sidebar.file_uploader("Tải lên ảnh mô hình (Ghim Đỏ, Xanh, Vàng)", type=["jpg", "png", "jpeg"])
     if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        img_array = np.array(image)
+        image = Image.open(uploaded_file).convert("RGB")
         st.sidebar.image(image, caption="Ảnh mô hình thực tế", use_container_width=True)
         
-        with st.spinner("🤖 AI đang quét các điểm màu Đỏ, Xanh dương, Vàng trên không gian Oxyz..."):
-            coords = detect_coordinates_by_color(img_array)
-        st.sidebar.success("✅ Đã nhận diện tọa độ các điểm thành công qua màu sắc!")
+        if model is not None and class_names is not None:
+            # Xử lý ảnh đưa vào mô hình Keras/Teachable Machine
+            image_resized = image.resize((224, 224))
+            image_array = np.asarray(image_resized)
+            normalized_image_array = (image_array.astype(np.float32) / 127.5) - 1
+            data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
+            data[0] = normalized_image_array
+            
+            # Dự đoán
+            prediction = model.predict(data)
+            index = np.argmax(prediction)
+            confidence_score = prediction[0][index]
+            detected_label = class_names[index]
+            
+            st.sidebar.success(f"🤖 AI Nhận diện: **{detected_label}** (Độ tin cậy: {confidence_score*100:.1f}%)")
+        else:
+            st.sidebar.warning("⚠️ Không tìm thấy file `keras_model.h5` hoặc `labels.txt` ở thư mục gốc GitHub. Đang dùng tọa độ mặc định.")
     else:
-        st.info("💡 Hãy tải ảnh chụp mô hình của nhóm lên để hệ thống tự động bóc tách tọa độ.")
+        st.info("💡 Hãy tải ảnh mô hình lên để AI phân tích.")
 else:
-    st.sidebar.markdown("Nhập tọa độ khi kiểm tra thủ công:")
-    coords["A"][0] = st.sidebar.number_input("Ax", value=2.0)
+    st.sidebar.markdown("Nhập tọa độ thực tế từ mô hình:")
+    coords["A"][0] = st.sidebar.number_input("Ax (Xanh dương)", value=2.0)
     coords["A"][1] = st.sidebar.number_input("Ay", value=3.0)
     coords["A"][2] = st.sidebar.number_input("Az", value=1.0)
     
-    coords["B"][0] = st.sidebar.number_input("Bx", value=8.0)
+    coords["B"][0] = st.sidebar.number_input("Bx (Đỏ)", value=8.0)
     coords["B"][1] = st.sidebar.number_input("By", value=6.0)
     coords["B"][2] = st.sidebar.number_input("Bz", value=4.0)
 
@@ -77,52 +81,46 @@ ax, ay, az = coords["A"]
 bx, by, bz = coords["B"]
 cx, cy, cz = coords["C"]
 
-# --- TAB CHỨC NĂNG ---
-tab1, tab2 = st.tabs(["🚀 Nhiệm Vụ 3: Thiết Lập & Tối Ưu Trạm Thả Hàng", "🌐 Mô Hình 3D Tương Tác"])
+# --- CÁC TAB CHỨC NĂNG ---
+tab1, tab2 = st.tabs(["🚀 Giải Pháp Nhiệm Vụ 3 & Tối Ưu", "🌐 Không Gian Oxyz 3D Tương Tác"])
 
 with tab1:
-    st.subheader("⚙️ Giải Pháp Tính Toán Nhiệm Vụ 3 (Tương tự đề bài yêu cầu)")
-    st.markdown("""
-    * **Yêu cầu Nhiệm vụ 3:** Tìm tọa độ điểm $M$ sao cho thỏa mãn đẳng thức vectơ (ví dụ: $\\vec{AD} = 2\\vec{AC}$ hoặc tối ưu khoảng cách thả hàng cứu trợ)[cite: 1].
-    """)
+    st.subheader("⚙️ Phân Tích & Tính Toán Quỹ Đạo Thả Hàng (Nhiệm Vụ 3)")
+    st.markdown("Xác định vị trí điểm thả hàng $M$ tối ưu dựa trên hệ số vectơ từ kho hàng $A$ và trạm trung chuyển $C$.")
     
-    # Cho phép điều chỉnh hệ số tính toán Nhiệm vụ 3
-    k_factor = st.slider("Hệ số tỉ lệ vectơ k (ví dụ: AD = k * AC)", min_value=0.5, max_value=3.0, value=2.0, step=0.5)
+    k_factor = st.slider("Hệ số tỉ lệ vectơ $k$ (Ví dụ: $\\vec{AM} = k\\cdot\\vec{AC}$)", 0.5, 3.0, 2.0, 0.5)
     
-    # Tính tọa độ điểm M dựa trên công thức vectơ từ A và C
-    # Giả sử điểm M (hoặc điểm D trong nhiệm vụ 3) tính theo A và C: M = A + k * AC
+    # Tính tọa độ M
     mx = ax + k_factor * (cx - ax)
     my = ay + k_factor * (cy - ay)
     mz = az + k_factor * (cz - az)
     
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Tọa độ Kho hàng (Xanh dương - A)", f"({ax}, {ay}, {az})")
-        st.metric("Tọa độ Trạm trung chuyển (Vàng - C)", f"({cx}, {cy}, {cz})")
+        st.metric("Kho hàng A (Xanh dương)", f"({ax}, {ay}, {az})")
+        st.metric("Trạm trung chuyển C (Vàng)", f"({cx}, {cy}, {cz})")
     with col2:
-        st.metric("Tọa độ Khu cứu trợ (Đỏ - B)", f"({bx}, {by}, {bz})")
-        st.metric(f"Tọa độ Vị trí thả hàng M (Tính theo hệ số k={k_factor})", f"({mx:.1f}, {my:.1f}, {mz:.1f})")
+        st.metric("Khu cứu trợ B (Đỏ)", f"({bx}, {by}, {bz})")
+        st.metric(f"Vị trí thả hàng M (k={k_factor})", f"({mx:.1f}, {my:.1f}, {mz:.1f})")
 
-    # Kiểm tra biểu thức tối ưu T (ví dụ: T = |MA - 2MB - MC|)
+    # Kiểm tra biểu thức tối ưu
     ma = np.linalg.norm(np.array([ax - mx, ay - my, az - mz]))
     mb = np.linalg.norm(np.array([bx - mx, by - my, bz - mz]))
     mc = np.linalg.norm(np.array([cx - mx, cy - my, cz - mz]))
     t_score = abs(ma - 2*mb - mc)
-    
-    st.info(f"📊 **Giá trị tối ưu biểu thức $T = \vert{}MA - 2MB - MC\vert{}$ tại điểm M:** `{t_score:.2f}`")
+    st.info(f"📊 **Biểu thức tối ưu $T = \vert{}MA - 2MB - MC\vert{}$ tại điểm M:** `{t_score:.2f}`")
 
 with tab2:
-    st.subheader("🌐 Không Gian Oxyz 3D (Phân định bằng Màu Sắc)")
+    st.subheader("🌐 Mô Hình Trực Quan Họa Oxyz 3D")
     
     fig = go.Figure()
-
-    # Các điểm mốc ứng với màu sắc thực tế trên mô hình
+    
     points_config = {
         "O (Gốc tọa độ)": [0, 0, 0, "gray"],
-        "A (Kho hàng - Xanh dương)": [ax, ay, az, "blue"],
+        "A (Kho hàng - Xanh)": [ax, ay, az, "blue"],
         "B (Khu cứu trợ - Đỏ)": [bx, by, bz, "red"],
-        "C (Trạm trung chuyển - Vàng)": [cx, cy, cz, "gold"],
-        "M (Vị trí thả hàng dự kiến)": [mx, my, mz, "purple"]
+        "C (Trạm - Vàng)": [cx, cy, cz, "gold"],
+        "M (Thả hàng)": [mx, my, mz, "purple"]
     }
 
     for name, (px, py, pz, color) in points_config.items():
@@ -135,26 +133,21 @@ with tab2:
             name=name
         ))
 
-    # Vẽ đường nối giữa các điểm biểu diễn vectơ
+    # Đường bay AB và AC-M
     fig.add_trace(go.Scatter3d(
         x=[ax, bx], y=[ay, by], z=[az, bz],
-        mode='lines',
-        line=dict(color='red', width=5),
-        name='Đường bay AB'
+        mode='lines', line=dict(color='red', width=5), name='Đường bay AB'
     ))
-    
     fig.add_trace(go.Scatter3d(
         x=[ax, cx, mx], y=[ay, cy, my], z=[az, cz, mz],
-        mode='lines',
-        line=dict(color='gold', width=4, dash='dash'),
-        name='Quỹ đạo tối ưu A-C-M'
+        mode='lines', line=dict(color='gold', width=4, dash='dash'), name='Quỹ đạo A-C-M'
     ))
 
     fig.update_layout(
         scene=dict(
-            xaxis=dict(title='Trục Ox', range=[0, 11]),
-            yaxis=dict(title='Trục Oy', range=[0, 11]),
-            zaxis=dict(title='Trục Oz (Độ cao)', range=[0, 11]),
+            xaxis=dict(title='Ox', range=[0, 11]),
+            yaxis=dict(title='Oy', range=[0, 11]),
+            zaxis=dict(title='Oz (Độ cao)', range=[0, 11]),
             camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))
         ),
         margin=dict(l=0, r=0, b=0, t=30),
@@ -164,4 +157,4 @@ with tab2:
     st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
-st.caption("🚀 Ứng dụng STEM Hộp Oxyz Thông Minh - Tối ưu hóa cho chiến dịch cứu trợ[cite: 1].")
+st.caption("🚀 Ứng dụng STEM Hộp Oxyz Thông Minh - Sẵn sàng deploy hoàn hảo lên Streamlit Cloud.")
