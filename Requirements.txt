@@ -4,3 +4,4 @@ numpy
 pandas
 pillow
 tensorflow
+spicy
