@@ -16,7 +16,8 @@ with col_left:
     st.subheader("📷 1. Chụp ảnh mô hình & Nhận diện qua Camera")
     st.info(
         "Chụp ảnh mô hình thực tế để AI Camera nhận diện các mốc. Dưới đây là"
-        " tọa độ Oxyz trích xuất được từ ảnh chụp:"
+        " tọa độ Oxyz trích xuất được từ ảnh chụp (Quy ước: 1 đơn vị = 1 km trên"
+        " thực địa):"
     )
 
     # Widget camera chụp ảnh
@@ -55,12 +56,10 @@ with col_left:
     # Vectơ nối từ Drone (Vàng) tới Người cần cứu trợ (Đỏ): vectơ V = P_red - P_yellow
     vec_direction = P_red - P_yellow
 
-    # Độ dài đại số của vectơ (Khoảng cách giữa hai điểm)
-    # Công thức: ||V|| = sqrt( (x_red - x_yellow)^2 + (y_red - y_yellow)^2 + (z_red - z_yellow)^2 )
+    # Độ dài đại số của vectơ (Khoảng cách giữa hai điểm) với đơn vị là km
     distance = np.linalg.norm(vec_direction)
 
     # Tọa độ hợp lý để Drone bay đến và thả hàng:
-    # Drone bay đến thẳng hình chiếu phía trên nạn nhân (cùng tọa độ X, Y của nạn nhân và giữ cao độ sát mặt đất hoặc cách một khoảng an toàn)
     P_drop = np.array([P_red[0], P_red[1], P_red[2] + 0.5])
 
     # Chuyển kiểu dữ liệu để hiển thị đẹp
@@ -75,8 +74,7 @@ with col_left:
     st.write(f"- 🟡 **Tọa độ Drone (Vàng):** `{list_yellow}`")
     st.write(f"- 📐 **Vectơ hướng bay $\\vec{{YD}}$:** `{list_vec}`")
     st.warning(
-        f"📏 **Khoảng cách (Độ dài đại số vectơ):** **{distance:.2f} đơn"
-        " vị**"
+        f"📏 **Khoảng cách (Độ dài đại số vectơ):** **{distance:.2f} km**"
     )
     st.success(
         f"🎯 **Tọa độ Drone bay tới thả hàng hợp lý:** `({list_drop[0]:.1f},"
@@ -157,9 +155,9 @@ with col_right:
     # Cấu hình không gian 3D chuẩn trục Oxyz
     fig.update_layout(
         scene=dict(
-            xaxis=dict(range=[0, 11], title="Trục Ox", zeroline=True),
-            yaxis=dict(range=[0, 11], title="Trục Oy", zeroline=True),
-            zaxis=dict(range=[0, 11], title="Trục Oz", zeroline=True),
+            xaxis=dict(range=[0, 11], title="Trục Ox (km)", zeroline=True),
+            yaxis=dict(range=[0, 11], title="Trục Oy (km)", zeroline=True),
+            zaxis=dict(range=[0, 11], title="Trục Oz (km)", zeroline=True),
             camera=dict(
                 eye=dict(x=1.6, y=-1.6, z=1.2), up=dict(x=0, y=0, z=1)
             ),
@@ -173,5 +171,5 @@ with col_right:
 st.markdown("---")
 st.caption(
     "💡 Nhiệm vụ 3: Nhận diện tọa độ từ camera ảnh chụp & Tính toán khoảng cách"
-    " bằng độ dài đại số của vectơ."
+    " bằng độ dài đại số của vectơ (đơn vị: km)."
 )
