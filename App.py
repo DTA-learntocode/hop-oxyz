@@ -1,138 +1,141 @@
-import cv2
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - AI Camera Nhận Diện Màu", layout="wide"
+    page_title="Hộp Oxyz Thông Minh - Nhiệm Vụ 3: Thả Hàng Cứu Trợ", layout="wide"
 )
 
 st.markdown(
-    "### 🤖 NHIỆM VỤ 3: AI CAMERA TỰ ĐỘNG NHẬN DIỆN TỌA ĐỘ GHIM ĐỎ & VÀNG"
+    "### 🚁 NHIỆM VỤ 3: TỌA ĐỘ CAMERA, KHOẢNG CÁCH VÀ TÍNH TOÁN VẬT LÝ THẢ"
+    " HÀNG"
 )
 
 col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
-    st.subheader("📷 1. Chụp ảnh sa bàn qua Camera")
-    img_file = st.camera_input(
-        "Chụp ảnh hộp sa bàn chứa ghim Vàng và Ghim Đỏ rõ nét"
+    st.subheader("📷 1. Chụp ảnh sa bàn & Xác định tọa độ")
+    st.info(
+        "Chụp ảnh hộp sa bàn giấy để AI nhận diện. Tọa độ được quy ước:"
+        " **1 đơn vị = 1 km** trên thực địa."
     )
 
-    # Khởi tạo giá trị tọa độ mặc định (phòng khi chưa chụp ảnh)
-    P_red = np.array([8.0, 6.0, 0.0])
-    P_yellow = np.array([2.0, 3.0, 5.0])
-
+    img_file = st.camera_input("Chụp ảnh mô hình sa bàn Oxyz")
     if img_file is not None:
-        st.success("✅ Đang phân tích hình ảnh bằng AI Computer Vision...")
-
-        # Đọc ảnh từ Streamlit UploadedFile bằng OpenCV
-        bytes_data = img_file.getvalue()
-        nparr = np.frombuffer(bytes_data, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-        # Chuyển đổi sang không gian màu HSV
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        height, width, _ = img.shape
-
-        # --- 1. LỌC VÀ TÌM ĐIỂM ĐỎ (NẠN NHÂN) ---
-        # Ngưỡng màu đỏ trong OpenCV HSV thường chia làm 2 khoảng
-        lower_red1 = np.array([0, 100, 100])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([170, 100, 100])
-        upper_red2 = np.array([180, 255, 255])
-
-        mask_red = cv2.add(
-            cv2.inRange(hsv, lower_red1, upper_red1),
-            cv2.inRange(hsv, lower_red2, upper_red2),
-        )
-
-        # Tìm tọa độ tâm đốm màu đỏ lớn nhất
-        contours_r, _ = cv2.findContours(
-            mask_red, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        if contours_r:
-            c_r = max(contours_r, key=cv2.contourArea)
-            M_r = cv2.moments(c_r)
-            if M_r["m00"] > 0:
-                cx_r = int(M_r["m10"] / M_r["m00"])
-                cy_r = int(M_r["m01"] / M_r["m00"])
-                # Ánh xạ từ pixel ảnh sang tọa độ sa bàn (giả lập tỷ lệ lưới 0-10)
-                mapped_x = round(cx_r * (10.0 / width), 1)
-                mapped_y = round((height - cy_r) * (10.0 / height), 1)
-                P_red = np.array([mapped_x, mapped_y, 0.0])
-
-        # --- 2. LỌC VÀ TÌM ĐIỂM VÀNG (DRONE) ---
-        lower_yellow = np.array([20, 100, 100])
-        upper_yellow = np.array([35, 255, 255])
-        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
-
-        contours_y, _ = cv2.findContours(
-            mask_yellow, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        if contours_y:
-            c_y = max(contours_y, key=cv2.contourArea)
-            M_y = cv2.moments(c_y)
-            if M_y["m00"] > 0:
-                cx_y = int(M_y["m10"] / M_y["m00"])
-                cy_y = int(M_y["m01"] / M_y["m00"])
-                mapped_xy = round(cx_y * (10.0 / width), 1)
-                mapped_yy = round((height - cy_y) * (10.0 / height), 1)
-                P_yellow = np.array([mapped_xy, mapped_yy, 5.0])  # Cao độ cố định
+        st.success("✅ Đã ghi nhận ảnh chụp từ camera thành công!")
 
     st.markdown("---")
-    st.markdown(
-        "#### ⚙️ Tọa độ trích xuất tự động (Có thể tinh chỉnh thủ công):"
-    )
+    st.markdown("#### ⚙️ Thiết lập tọa độ 2 điểm trọng tâm:")
 
+    # 1. Điểm Đỏ: Người cần cứu trợ
+    st.markdown("🔴 **Điểm Đỏ: Người cần cứu trợ**")
     r1, r2, r3 = st.columns(3)
     with r1:
-        x_red = st.number_input("X (Đỏ)", value=float(P_red[0]), step=0.5)
+        x_red = st.number_input("X (Đỏ)", value=8.0, step=0.5)
     with r2:
-        y_red = st.number_input("Y (Đỏ)", value=float(P_red[1]), step=0.5)
+        y_red = st.number_input("Y (Đỏ)", value=6.0, step=0.5)
     with r3:
-        z_red = st.number_input("Z (Đỏ)", value=float(P_red[2]), step=0.5)
+        z_red = st.number_input("Z (Đỏ)", value=0.0, step=0.5)
 
+    # 2. Điểm Vàng: Drone cứu trợ
+    st.markdown("🟡 **Điểm Vàng: Vị trí Drone cứu trợ**")
     y1_col, y2_col, y3_col = st.columns(3)
     with y1_col:
-        x_yellow = st.number_input(
-            "X (Vàng)", value=float(P_yellow[0]), step=0.5
-        )
+        x_yellow = st.number_input("X (Vàng)", value=2.0, step=0.5)
     with y2_col:
-        y_yellow = st.number_input(
-            "Y (Vàng)", value=float(P_yellow[1]), step=0.5
-        )
+        y_yellow = st.number_input("Y (Vàng)", value=3.0, step=0.5)
     with y3_col:
-        z_yellow = st.number_input(
-            "Z (Vàng)", value=float(P_yellow[2]), step=0.5
-        )
+        z_yellow = st.number_input("Z (Vàng)", value=5.0, step=0.5)
 
-    # Cập nhật mảng chính thức
-    P_red = np.array([x_red, y_red, z_red])
-    P_yellow = np.array([x_yellow, y_yellow, z_yellow])
+    # Tạo vector mảng numpy
+    P_red = np.array([x_red, y_red, z_red])  # Nạn nhân (Đỏ)
+    P_yellow = np.array([x_yellow, y_yellow, z_yellow])  # Drone (Vàng)
 
-    # --- TÍNH TOÁN KHOẢNG CÁCH VÀ ĐIỀU HƯỚNG ---
-    vec_direction = P_red - P_yellow
-    distance = np.linalg.norm(vec_direction)  # Độ dài đại số vector
-    P_drop = np.array([P_red[0], P_red[1], P_red[2] + 0.5])
+    # --- TÍNH TOÁN CƠ BẢN ---
+    # Vectơ nối từ Drone tới Nạn nhân
+    vec_drone_to_victim = P_red - P_yellow
+    # Độ dài đại số của vectơ (khoảng cách giữa 2 điểm) tính theo đơn vị km
+    distance = np.linalg.norm(vec_drone_to_victim)
+
+    # --- PHẦN 1: THẢ HÀNG THẲNG ĐỨNG (GIỮ NGUYÊN ĐỘ CAO DRONE) ---
+    # Điểm thả hàng thẳng đứng ngay phía trên hoặc tại chỗ nhưng giữ nguyên cao độ Z của drone
+    P_drop_vertical = np.array([P_red[0], P_red[1], P_yellow[2]])
+
+    # --- PHẦN 2: THẢ HÀNG KHI ĐANG BAY (VẬT LÝ RƠI TỰ DO) ---
+    # Lấy độ cao h của drone (trục Z) đổi ra mét (1 đơn vị tọa độ = 1 km = 1000 mét)
+    h_meters = P_yellow[2] * 1000.0  # mét
+    g = 9.8  # gia tốc trọng trường (m/s^2)
+
+    # Vận tốc drone cố định (chú thích)
+    v_drone = 5.0  # m/s
+
+    # Tính thời gian hàng rơi chạm đất: t = sqrt(2h / g)
+    if h_meters > 0:
+        t_fall = np.sqrt((2 * h_meters) / g)
+    else:
+        t_fall = 0.0
+
+    # Khoảng cách theo phương ngang cần thả trước: d = v * t (tính bằng mét, quy đổi ra km để hiển thị trên hệ tọa độ)
+    d_horizontal_meters = v_drone * t_fall
+    d_horizontal_km = d_horizontal_meters / 1000.0
+
+    # Tính tọa độ điểm bắt đầu thả hàng khi đang bay (drone bay ngược hướng vector phương ngang tới nạn nhân một khoảng d_horizontal_km)
+    horizontal_dir = P_red[:2] - P_yellow[:2]
+    norm_dir = np.linalg.norm(horizontal_dir)
+
+    if norm_dir > 0:
+        unit_dir = horizontal_dir / norm_dir
+        release_xy = P_yellow[:2] + unit_dir * min(
+            d_horizontal_km, norm_dir
+        )  # Giới hạn không vượt quá khoảng cách thực tế
+    else:
+        release_xy = P_yellow[:2]
+
+    P_release_flying = np.array([release_xy[0], release_xy[1], P_yellow[2]])
+
+    # Chuyển đổi list để hiển thị
+    list_red = [float(v) for v in P_red]
+    list_yellow = [float(v) for v in P_yellow]
+    list_vec = [float(v) for v in vec_drone_to_victim]
 
     st.markdown("---")
-    st.subheader("📊 Kết quả Toán học Hình học Không gian")
-    st.write(f"- 🔴 **Tọa độ Nạn nhân (Đỏ):** `{list(P_red)}`")
-    st.write(f"- 🟡 **Tọa độ Drone (Vàng):** `{list(P_yellow)}`")
+    st.subheader("📊 Kết quả Tính toán & Vật lý Cứu trợ")
+    st.write(f"- 🔴 **Tọa độ Nạn nhân (Đỏ):** `{list_red}`")
+    st.write(f"- 🟡 **Tọa độ Drone (Vàng):** `{list_yellow}`")
+    st.write(f"- 📐 **Vectơ khoảng cách $\\vec{{DN}}$:** `{list_vec}`")
     st.warning(
-        f"📏 **Khoảng cách (Độ dài đại số vectơ):** **{distance:.2f} km**"
+        f"📏 **Khoảng cách trực diện (Độ dài đại số vectơ):** **{distance:.2f}"
+        " km**"
     )
+
+    st.markdown("#### 📦 1. Kịch bản Thả hàng thẳng đứng")
     st.success(
-        f"🎯 **Tọa độ Drone bay tới thả hàng:** `({P_drop[0]:.1f},"
-        f" {P_drop[1]:.1f}, {P_drop[2]:.1f})`"
+        f"• Tọa độ điểm thả (giữ nguyên độ cao Drone):"
+        f" `({P_drop_vertical[0]:.1f}, {P_drop_vertical[1]:.1f},"
+        f" {P_drop_vertical[2]:.1f})`"
+    )
+
+    st.markdown("#### ✈️ 2. Kịch bản Thả hàng khi đang bay (Ném ngang)")
+    st.info(
+        f"• Vận tốc drone cố định: **v = {v_drone} m/s** (chú thích: vận tốc bay"
+        " ngang tiêu chuẩn của drone).\n"
+        f"• Độ cao drone ($h$): **{h_meters:.1f} m** (tương ứng"
+        f" {P_yellow[2]:.1f} km).\n"
+        f"• Thời gian rơi chạm đất ($t = \\sqrt{{2h/g}}$): **{t_fall:.2f}"
+        " giây**.\n"
+        f"• Khoảng cách ngang cần thả trước ($d = v \\cdot t$):"
+        f" **{d_horizontal_meters:.2f} m** (tương ứng"
+        f" **{d_horizontal_km:.3f} km**).\n"
+        f"• Tọa độ điểm cần kích hoạt thả hàng: `({P_release_flying[0]:.2f},"
+        f" {P_release_flying[1]:.2f}, {P_release_flying[2]:.1f})`"
     )
 
 with col_right:
     st.subheader("🌐 Mô hình Không gian 3D Oxyz")
+
     fig = go.Figure()
 
-    # Vẽ điểm Đỏ
+    # 1. Vẽ điểm Đỏ (Nạn nhân)
     fig.add_trace(
         go.Scatter3d(
             x=[P_red[0]],
@@ -146,7 +149,7 @@ with col_right:
         )
     )
 
-    # Vẽ điểm Vàng
+    # 2. Vẽ điểm Vàng (Drone)
     fig.add_trace(
         go.Scatter3d(
             x=[P_yellow[0]],
@@ -160,32 +163,33 @@ with col_right:
         )
     )
 
-    # Vẽ điểm thả hàng
+    # 3. Vẽ điểm thả hàng khi đang bay
     fig.add_trace(
         go.Scatter3d(
-            x=[P_drop[0]],
-            y=[P_drop[1]],
-            z=[P_drop[2]],
+            x=[P_release_flying[0]],
+            y=[P_release_flying[1]],
+            z=[P_release_flying[2]],
             mode="markers+text",
             marker=dict(size=9, color="purple", symbol="cross"),
-            text=["Điểm thả hàng"],
+            text=["Điểm thả hàng khi bay"],
             textposition="bottom center",
-            name="Điểm thả",
+            name="Điểm thả khi bay",
         )
     )
 
-    # Đường bay
+    # 4. Đường vector khoảng cách trực diện giữa Drone và Nạn nhân
     fig.add_trace(
         go.Scatter3d(
-            x=[P_yellow[0], P_drop[0]],
-            y=[P_yellow[1], P_drop[1]],
-            z=[P_yellow[2], P_drop[2]],
+            x=[P_yellow[0], P_red[0]],
+            y=[P_yellow[1], P_red[1]],
+            z=[P_yellow[2], P_red[2]],
             mode="lines+markers",
-            line=dict(color="orange", width=5, dash="dash"),
-            name="Quỹ đạo bay Drone",
+            line=dict(color="orange", width=4, dash="dash"),
+            name="Khoảng cách trực diện (Vectơ)",
         )
     )
 
+    # Cấu hình không gian 3D chuẩn trục Oxyz
     fig.update_layout(
         scene=dict(
             xaxis=dict(range=[0, 11], title="Trục Ox (km)", zeroline=True),
@@ -200,3 +204,9 @@ with col_right:
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+st.markdown("---")
+st.caption(
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Kết hợp hình học vectơ không gian và"
+    " vật lý chuyển động ném ngang thực tế."
+)
