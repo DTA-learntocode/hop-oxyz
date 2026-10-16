@@ -146,14 +146,13 @@ with col_left:
 
     st.markdown("#### ✈️ 2. Kịch bản Thả hàng khi đang bay (Ném ngang)")
     st.info(
-        f"• Vận tốc drone cố định: **v = {v_drone} m/s** (vận tốc bay ngang tiêu"
+        f"• Vận tốc drone cố định: v = {v_drone} m/s (vận tốc bay ngang tiêu"
         f" chuẩn).\n"
-        f"• Độ cao drone ($h$): **{h_meters:.1f} m** (tương ứng"
-        f" {P_yellow[2]:.1f} km).\n"
-        f"• Thời gian rơi chạm đất ($t = \\sqrt{{2h/g}}$): **{t_fall:.2f}"
-        f" giây** (với $g = {g}\\text{ m/s}^2$).\n"
-        f"• Khoảng cách ngang cần thả trước ($d = v \\cdot t$):"
-        f" **{d_horizontal_meters:.2f} m** (~**{d_horizontal_km:.3f} km**).\n"
+        f"• Độ cao drone (h): {h_meters:.1f} m (tương ứng {P_yellow[2]:.1f}"
+        f" km).\n"
+        f"• Thời gian rơi chạm đất (t): {t_fall:.2f} giây (với g = {g} m/s^2).\n"
+        f"• Khoảng cách ngang cần thả trước (d): {d_horizontal_meters:.2f} m"
+        f" (~{d_horizontal_km:.3f} km).\n"
         f"• Tọa độ điểm kích hoạt thả hàng: `({P_release_flying[0]:.2f},"
         f" {P_release_flying[1]:.2f}, {P_release_flying[2]:.1f})`"
     )
