@@ -88,7 +88,26 @@ with col_left:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             detector = aruco.ArucoDetector(
                 aruco.getPredefinedDictionary(aruco.DICT_4X4_50),
-                aruco.DetectorParameters()
+                parameters = aruco.DetectorParameters()
+
+# Tăng khả năng nhận khi mã nhỏ hoặc hơi mờ
+parameters.adaptiveThreshWinSizeMin = 3
+parameters.adaptiveThreshWinSizeMax = 23
+parameters.adaptiveThreshWinSizeStep = 10
+parameters.adaptiveThreshConstant = 7
+
+# Cho phép mã hơi nghiêng và méo
+parameters.minMarkerPerimeterRate = 0.02
+parameters.maxMarkerPerimeterRate = 4.0
+parameters.polygonalApproxAccuracyRate = 0.05
+parameters.minCornerDistanceRate = 0.05
+parameters.minDistanceToBorder = 3
+
+# Giảm nhiễu
+parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+parameters.cornerRefinementWinSize = 5
+parameters.cornerRefinementMaxIterations = 30
+parameters.cornerRefinementMinAccuracy = 0.1
             )
             corners, ids, _ = detector.detectMarkers(gray)
 
