@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz - Affine theo ID thực tế",
+    page_title="Hộp Oxyz - ID 0 1 2 3",
     layout="wide",
 )
 
@@ -15,7 +15,7 @@ for key, val in [("x_red", 3), ("y_red", 2), ("z_red", 0),
     if key not in st.session_state:
         st.session_state[key] = val
 
-st.markdown("### 🚁 HỆ THỐNG OXYZ – Theo đúng vị trí 4 mã ArUco của bạn")
+st.markdown("### 🚁 HỆ THỐNG OXYZ – Đúng ID 0, 1, 2, 3")
 
 col_left, col_right = st.columns([1, 1.2])
 
@@ -30,7 +30,6 @@ def get_marker_centers(corners, ids):
     return centers
 
 def compute_affine_coords(pin_pt, pts_src, pts_dst):
-    """Affine 3 điểm → (x, y) liên tục 0-10"""
     if len(pts_src) < 3:
         return None
     M = cv2.getAffineTransform(np.float32(pts_src), np.float32(pts_dst))
@@ -64,31 +63,8 @@ def detect_color_centroid(img, color="yellow"):
         return None
     return int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
 
-# ====================== GIAO DIỆN ======================
-with col_left:
-    st.subheader("📷 Quét ArUco & Ước lượng tọa độ")
-    st.info(
-        "**ID thực tế của bạn:**  \n"
-        "- ID 1 = (0,0,0)  \n"
-        "- ID 2 = (10,0,0)  \n"
-        "- ID 3 = (0,10,0)  \n"
-        "- ID 4 = (0,0,10)  \n\n"
-        "Mặt sàn dùng ID 1-2-3 | Mặt tường dùng ID 1-2-4"
-    )
-
-    tab_tuong, tab_san = st.tabs(["🧱 Mặt Tường (Oxz)", "🟫 Mặt Sàn (Oxy)"])
-
-    # ---------- TƯỜNG Oxz (dùng ID 1, 2, 4) ----------
-    with tab_tuong:
-        st.markdown("**Mặt tường Oxz:** Cần **ID 1, 2, 4**")
-        img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
-
-        if img_tuong is not None:
-            img = cv2.imdecode(np.frombuffer(img_tuong.getvalue(), np.uint8), cv2.IMREAD_COLOR)
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            detector = aruco.ArucoDetector(
-                aruco.getPredefinedDictionary(aruco.DICT_4X4_50),
-                parameters = aruco.DetectorParameters()
+# ====================== CẤU HÌNH ARUCO PARAMETERS ======================
+parameters = aruco.DetectorParameters()
 
 # Tăng khả năng nhận khi mã nhỏ hoặc hơi mờ
 parameters.adaptiveThreshWinSizeMin = 3
@@ -108,6 +84,31 @@ parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
 parameters.cornerRefinementWinSize = 5
 parameters.cornerRefinementMaxIterations = 30
 parameters.cornerRefinementMinAccuracy = 0.1
+
+# ====================== GIAO DIỆN ======================
+with col_left:
+    st.subheader("📷 Quét ArUco & Ước lượng tọa độ")
+    st.info(
+        "**Vị trí mã ArUco:**  \n"
+        "- **ID 0** = (0, 0, 0) – Gốc  \n"
+        "- **ID 1** = (10, 0, 0) – Ox  \n"
+        "- **ID 2** = (0, 10, 0) – Oy  \n"
+        "- **ID 3** = (0, 0, 10) – Oz"
+    )
+
+    tab_tuong, tab_san = st.tabs(["🧱 Mặt Tường (Oxz)", "🟫 Mặt Sàn (Oxy)"])
+
+    # ---------- TƯỜNG Oxz (ID 0, 1, 3) ----------
+    with tab_tuong:
+        st.markdown("**Mặt tường Oxz:** Cần **ID 0, 1, 3**")
+        img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
+
+        if img_tuong is not None:
+            img = cv2.imdecode(np.frombuffer(img_tuong.getvalue(), np.uint8), cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            detector = aruco.ArucoDetector(
+                aruco.getPredefinedDictionary(aruco.DICT_4X4_50),
+                parameters
             )
             corners, ids, _ = detector.detectMarkers(gray)
 
@@ -123,10 +124,9 @@ parameters.cornerRefinementMinAccuracy = 0.1
                     cv2.putText(img_draw, "Ghim Vang", (pin[0]+15, pin[1]),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-                    # Affine với ID 1, 2, 4
-                    if all(k in centers for k in [1, 2, 4]):
-                        pts_src = [centers[1], centers[2], centers[4]]
-                        pts_dst = [(0, 0), (10, 0), (0, 10)]   # XZ
+                    if all(k in centers for k in [0, 1, 3]):
+                        pts_src = [centers[0], centers[1], centers[3]]
+                        pts_dst = [(0, 0), (10, 0), (0, 10)]  # XZ
                         result = compute_affine_coords(pin, pts_src, pts_dst)
 
                         if result:
@@ -138,14 +138,14 @@ parameters.cornerRefinementMinAccuracy = 0.1
                             st.session_state.y_yellow = 0
 
                             st.success(
-                                f"🤖 **Affine (ID 1-2-4)**  \n"
+                                f"🤖 **Affine (ID 0-1-3)**  \n"
                                 f"Liên tục: X ≈ `{x_cont:.2f}`, Z ≈ `{z_cont:.2f}`  \n"
                                 f"→ **Số nguyên: X = {auto_x}, Z = {auto_z}**"
                             )
                         else:
                             st.warning("Không tính được Affine.")
                     else:
-                        st.warning("⚠️ Chưa đủ ID 1, 2, 4 trên tường.")
+                        st.warning("⚠️ Chưa đủ ID 0, 1, 3 trên tường.")
                 else:
                     st.warning("⚠️ Không thấy ghim Vàng.")
 
@@ -153,9 +153,9 @@ parameters.cornerRefinementMinAccuracy = 0.1
             else:
                 st.error("❌ Không tìm thấy ArUco.")
 
-    # ---------- SÀN Oxy (dùng ID 1, 2, 3) ----------
+    # ---------- SÀN Oxy (ID 0, 1, 2) ----------
     with tab_san:
-        st.markdown("**Mặt sàn Oxy:** Cần **ID 1, 2, 3**")
+        st.markdown("**Mặt sàn Oxy:** Cần **ID 0, 1, 2**")
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
 
         if img_san is not None:
@@ -163,7 +163,7 @@ parameters.cornerRefinementMinAccuracy = 0.1
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             detector = aruco.ArucoDetector(
                 aruco.getPredefinedDictionary(aruco.DICT_4X4_50),
-                aruco.DetectorParameters()
+                parameters
             )
             corners, ids, _ = detector.detectMarkers(gray)
 
@@ -179,10 +179,9 @@ parameters.cornerRefinementMinAccuracy = 0.1
                     cv2.putText(img_draw, "Ghim Do", (pin[0]+15, pin[1]),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-                    # Affine với ID 1, 2, 3
-                    if all(k in centers for k in [1, 2, 3]):
-                        pts_src = [centers[1], centers[2], centers[3]]
-                        pts_dst = [(0, 0), (10, 0), (0, 10)]   # XY
+                    if all(k in centers for k in [0, 1, 2]):
+                        pts_src = [centers[0], centers[1], centers[2]]
+                        pts_dst = [(0, 0), (10, 0), (0, 10)]  # XY
                         result = compute_affine_coords(pin, pts_src, pts_dst)
 
                         if result:
@@ -194,14 +193,14 @@ parameters.cornerRefinementMinAccuracy = 0.1
                             st.session_state.z_red = 0
 
                             st.success(
-                                f"🤖 **Affine (ID 1-2-3)**  \n"
+                                f"🤖 **Affine (ID 0-1-2)**  \n"
                                 f"Liên tục: X ≈ `{x_cont:.2f}`, Y ≈ `{y_cont:.2f}`  \n"
                                 f"→ **Số nguyên: X = {auto_x}, Y = {auto_y}**"
                             )
                         else:
                             st.warning("Không tính được Affine.")
                     else:
-                        st.warning("⚠️ Chưa đủ ID 1, 2, 3 dưới sàn.")
+                        st.warning("⚠️ Chưa đủ ID 0, 1, 2 dưới sàn.")
                 else:
                     st.warning("⚠️ Không thấy ghim Đỏ.")
 
@@ -283,4 +282,4 @@ with col_right:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-st.caption("💡 Đã cập nhật đúng ID: 1=(0,0,0), 2=(10,0,0), 3=(0,10,0), 4=(0,0,10)")
+st.caption("💡 Đã sửa lại đúng: ID 0 = gốc, ID 1 = Ox, ID 2 = Oy, ID 3 = Oz")
