@@ -280,5 +280,5 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Camera tỷ lệ 1:1 & Mô phỏng Vật lý 3D."
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh'"
 )
