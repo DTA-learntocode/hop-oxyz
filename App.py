@@ -27,7 +27,7 @@ st.markdown(
 )
 
 st.markdown(
-    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: CAMERA 1:1 & NHẬN DIỆN ARUCO TỪNG MẶT"
+    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH"
 )
 
 col_left, col_right = st.columns([1, 1.2])
@@ -280,5 +280,5 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh'"
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Camera tỷ lệ 1:1 & Mô phỏng Vật lý 3D."
 )
