@@ -5,10 +5,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Tự Động Quy Đổi Tọa Độ", layout="wide"
+    page_title="Hộp Oxyz Thông Minh - Quét Đủ 3 Màu Ghim (Đỏ, Vàng, Xanh)",
+    layout="wide",
 )
 
-# Khởi tạo session state để lưu tọa độ động
+# Khởi tạo session state lưu tọa độ 3 điểm
 if "x_red" not in st.session_state:
     st.session_state.x_red = 3.0
 if "y_red" not in st.session_state:
@@ -23,17 +24,24 @@ if "y_yellow" not in st.session_state:
 if "z_yellow" not in st.session_state:
     st.session_state.z_yellow = 1.0
 
+if "x_blue" not in st.session_state:
+    st.session_state.x_blue = 1.0
+if "y_blue" not in st.session_state:
+    st.session_state.y_blue = 4.0
+if "z_blue" not in st.session_state:
+    st.session_state.z_blue = 0.0
+
 st.markdown(
-    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG ĐỌC TỌA ĐỘ TỪ ARUCO & MÀU SẮC"
+    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG ĐỌC TỌA ĐỘ ĐỎ - VÀNG - XANH"
 )
 
 col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
-    st.subheader("📷 1. Quét ArUco & Tự động nội suy tọa độ")
+    st.subheader("📷 1. Quét ArUco & Tự động đọc ghim Đỏ, Vàng, Xanh")
     st.info(
-        "Chụp mặt sàn (Oxy) để AI tự động nhận diện mốc ArUco và tính ra tọa"
-        " độ $(X, Y)$ của nạn nhân."
+        "Chụp mặt sàn (Oxy) để AI tự động phát hiện ghim Đỏ (Nạn nhân), Vàng"
+        " (Drone) và Xanh (Mốc/Trạm)."
     )
 
     tab_tuong, tab_san = st.tabs(
@@ -42,8 +50,7 @@ with col_left:
 
     with tab_tuong:
         st.markdown(
-            "**Mặt tường ($Oxz$):** Quét các mốc định vị **ID 0**, **ID 1**, **ID"
-            " 3**."
+            "**Mặt tường ($Oxz$):** Quét các mốc **ID 0**, **ID 1**, **ID 3**."
         )
         img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
         if img_tuong is not None:
@@ -51,8 +58,7 @@ with col_left:
 
     with tab_san:
         st.markdown(
-            "**Mặt sàn ($Oxy$):** Quét các mốc **ID 0**, **ID 1**, **ID 2** và"
-            " ghim Đỏ."
+            "**Mặt sàn ($Oxy$):** Quét các mốc **ID 0, 1, 2** và các ghim màu."
         )
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
 
@@ -73,89 +79,133 @@ with col_left:
                     f"🎯 Đã phát hiện các mã ArUco dưới sàn: `{list(flat_ids)}`"
                 )
 
-                # Thuật toán tìm ghim Đỏ dựa trên màu sắc HSV và quy đổi tương đối
+                # Chuyển không gian màu sang HSV
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-                lower_red1 = np.array([0, 120, 70])
-                upper_red1 = np.array([10, 255, 255])
-                mask_red = cv2.inRange(hsv, lower_red1, upper_red1)
+                h_img, w_img = img.shape[:2]
 
+                # 1. Mask màu Đỏ
+                lower_red = np.array([0, 120, 70])
+                upper_red = np.array([10, 255, 255])
+                mask_red = cv2.inRange(hsv, lower_red, upper_red)
                 M_red = cv2.moments(mask_red)
-                if M_red["m00"] > 100:
-                    cX_red = int(M_red["m10"] / M_red["m00"])
-                    cY_red = int(M_red["m01"] / M_red["m00"])
-
-                    # Ví dụ mô phỏng quy đổi pixel sang tọa độ sa bàn (0 đến 10)
-                    # Dựa vào kích thước ảnh, ta chuẩn hóa tương đối
-                    h_img, w_img = img.shape[:2]
-                    # Giả lập ánh xạ tỷ lệ từ khung hình ảnh sang hệ tọa độ 10x10 ô
-                    auto_x = round(
-                        np.clip((cX_red / w_img) * 10.0, 0.0, 10.0), 1
+                if M_red["m00"] > 50:
+                    cX = int(M_red["m10"] / M_red["m00"])
+                    cY = int(M_red["m01"] / M_red["m00"])
+                    st.session_state.x_red = round(
+                        np.clip((cX / w_img) * 10.0, 0.0, 10.0), 1
                     )
-                    auto_y = round(
-                        np.clip((1.0 - (cY_red / h_img)) * 10.0, 0.0, 10.0), 1
+                    st.session_state.y_red = round(
+                        np.clip((1.0 - (cY / h_img)) * 10.0, 0.0, 10.0), 1
                     )
 
-                    # Cập nhật vào Session State để đổi số trực tiếp trên giao diện
-                    st.session_state.x_red = auto_x
-                    st.session_state.y_red = auto_y
+                # 2. Mask màu Vàng
+                lower_yellow = np.array([20, 100, 100])
+                upper_yellow = np.array([35, 255, 255])
+                mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+                M_yellow = cv2.moments(mask_yellow)
+                if M_yellow["m00"] > 50:
+                    cX = int(M_yellow["m10"] / M_yellow["m00"])
+                    cY = int(M_yellow["m01"] / M_yellow["m00"])
+                    st.session_state.x_yellow = round(
+                        np.clip((cX / w_img) * 10.0, 0.0, 10.0), 1
+                    )
+                    st.session_state.y_yellow = round(
+                        np.clip((1.0 - (cY / h_img)) * 10.0, 0.0, 10.0), 1
+                    )
 
-                    st.success(
-                        f"🤖 AI tự động tính toán tọa độ Ghim Đỏ: X ="
-                        f" `{auto_x}`, Y = `{auto_y}`"
+                # 3. Mask màu Xanh (Xanh dương / Blue)
+                lower_blue = np.array([100, 100, 100])
+                upper_blue = np.array([130, 255, 255])
+                mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
+                M_blue = cv2.moments(mask_blue)
+                if M_blue["m00"] > 50:
+                    cX = int(M_blue["m10"] / M_blue["m00"])
+                    cY = int(M_blue["m01"] / M_blue["m00"])
+                    st.session_state.x_blue = round(
+                        np.clip((cX / w_img) * 10.0, 0.0, 10.0), 1
                     )
-                else:
-                    st.warning(
-                        "⚠️ Không tìm thấy ghim Đỏ rõ nét trên ảnh. Hãy chắc"
-                        " chắn ghim có màu đỏ nổi bật."
+                    st.session_state.y_blue = round(
+                        np.clip((1.0 - (cY / h_img)) * 10.0, 0.0, 10.0), 1
                     )
+
+                st.success(
+                    "🤖 AI đã hoàn tất tự động nhận diện vị trí các ghim Đỏ,"
+                    " Vàng, Xanh!"
+                )
             else:
-                st.error("❌ Không tìm thấy mã ArUco nào dưới sàn.")
+                st.error("❌ Không tìm thấy mã ArUco dưới sàn.")
 
     st.markdown("---")
-    st.markdown("#### ⚙️ Thiết lập & Hiệu chỉnh tọa độ không gian:")
+    st.markdown("#### ⚙️ Tọa độ các điểm trên sa bàn:")
 
-    # Điểm Đỏ: Nạn nhân (Được liên kết với session state tự động cập nhật)
+    # 🔴 Điểm Đỏ
     st.markdown("🔴 **Điểm Đỏ: Nạn nhân cứu trợ**")
     r1, r2, r3 = st.columns(3)
     with r1:
         x_red = st.number_input(
-            "X (Đỏ)", value=float(st.session_state.x_red), step=0.5, key="inp_x"
+            "X (Đỏ)", value=float(st.session_state.x_red), step=0.5, key="rx"
         )
     with r2:
         y_red = st.number_input(
-            "Y (Đỏ)", value=float(st.session_state.y_red), step=0.5, key="inp_y"
+            "Y (Đỏ)", value=float(st.session_state.y_red), step=0.5, key="ry"
         )
     with r3:
         z_red = st.number_input(
-            "Z (Đỏ)", value=float(st.session_state.z_red), step=0.5, key="inp_z"
+            "Z (Đỏ)", value=float(st.session_state.z_red), step=0.5, key="rz"
         )
 
-    # Điểm Vàng: Drone
+    # 🟡 Điểm Vàng
     st.markdown("🟡 **Điểm Vàng: Drone cứu trợ**")
     y1_col, y2_col, y3_col = st.columns(3)
     with y1_col:
         x_yellow = st.number_input(
-            "X (Vàng)", value=float(st.session_state.x_yellow), step=0.5
+            "X (Vàng)",
+            value=float(st.session_state.x_yellow),
+            step=0.5,
+            key="yx",
         )
     with y2_col:
         y_yellow = st.number_input(
-            "Y (Vàng)", value=float(st.session_state.y_yellow), step=0.5
+            "Y (Vàng)",
+            value=float(st.session_state.y_yellow),
+            step=0.5,
+            key="yy",
         )
     with y3_col:
         z_yellow = st.number_input(
-            "Z (Vàng)", value=float(st.session_state.z_yellow), step=0.5
+            "Z (Vàng)",
+            value=float(st.session_state.z_yellow),
+            step=0.5,
+            key="yz",
+        )
+
+    # 🔵 Điểm Xanh
+    st.markdown("🔵 **Điểm Xanh: Trạm / Mốc phụ**")
+    b1, b2, b3 = st.columns(3)
+    with b1:
+        x_blue = st.number_input(
+            "X (Xanh)", value=float(st.session_state.x_blue), step=0.5, key="bx"
+        )
+    with b2:
+        y_blue = st.number_input(
+            "Y (Xanh)", value=float(st.session_state.y_blue), step=0.5, key="by"
+        )
+    with b3:
+        z_blue = st.number_input(
+            "Z (Xanh)", value=float(st.session_state.z_blue), step=0.5, key="bz"
         )
 
     P_red = np.array([x_red, y_red, z_red])
     P_yellow = np.array([x_yellow, y_yellow, z_yellow])
+    P_blue = np.array([x_blue, y_blue, z_blue])
 
-    # --- BÀI TOÁN VẬT LÝ & HÌNH HỌC ---
+    # --- TÍNH TOÁN VẬT LÝ & HÌNH HỌC ---
     vec_direction = P_red - P_yellow
     distance = np.linalg.norm(vec_direction)
 
     P_drop_vertical = np.array([P_red[0], P_red[1], P_yellow[2]])
 
-    h_meters = P_yellow[2] * 1000.0  # 1 đơn vị = 1 km = 1000 mét
+    h_meters = P_yellow[2] * 1000.0
     g = 9.8
     v_drone = 5.0
 
@@ -178,6 +228,7 @@ with col_left:
     st.subheader("📊 Kết quả Phân tích & Tính toán")
     st.write(f"- 🔴 **Tọa độ Nạn nhân (Đỏ):** `{list(P_red)}`")
     st.write(f"- 🟡 **Tọa độ Drone (Vàng):** `{list(P_yellow)}`")
+    st.write(f"- 🔵 **Tọa độ Trạm mốc (Xanh):** `{list(P_blue)}`")
     st.write(f"- 📐 **Vectơ khoảng cách $\\vec{{DN}}$:** `{list(vec_direction)}`")
     st.warning(
         f"📏 **Khoảng cách trực diện (Độ dài vectơ):** **{distance:.2f} km**"
@@ -217,7 +268,7 @@ with col_right:
             marker=dict(size=11, color="red", symbol="diamond"),
             text=["Nạn nhân (Đỏ)"],
             textposition="top center",
-            name="Nạn nhân",
+            name="Nạn nhân (Đỏ)",
         )
     )
 
@@ -231,7 +282,21 @@ with col_right:
             marker=dict(size=11, color="gold", symbol="square"),
             text=["Drone (Vàng)"],
             textposition="top center",
-            name="Drone",
+            name="Drone (Vàng)",
+        )
+    )
+
+    # Điểm Xanh (Trạm mốc)
+    fig.add_trace(
+        go.Scatter3d(
+            x=[P_blue[0]],
+            y=[P_blue[1]],
+            z=[P_blue[2]],
+            mode="markers+text",
+            marker=dict(size=11, color="blue", symbol="circle"),
+            text=["Trạm mốc (Xanh)"],
+            textposition="top center",
+            name="Trạm mốc (Xanh)",
         )
     )
 
@@ -279,6 +344,6 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Tự động nội suy tọa độ từ hình ảnh"
-    " camera."
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Nhận diện và mô phỏng đồng thời 3 điểm"
+    " Đỏ, Vàng, Xanh."
 )
