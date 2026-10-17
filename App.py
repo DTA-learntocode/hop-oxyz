@@ -5,27 +5,27 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Quét Ghim Đỏ & Vàng", layout="wide"
+    page_title="Hộp Oxyz Thông Minh - Quy Ước Số Nguyên", layout="wide"
 )
 
-# Khởi tạo Session State lưu tọa độ ghim Đỏ (Sàn) và ghim Vàng (Tường)
+# Session state lưu tọa độ SỐ NGUYÊN (int)
 if "x_red" not in st.session_state:
-    st.session_state.x_red = 3.0
+    st.session_state.x_red = 3
 if "y_red" not in st.session_state:
-    st.session_state.y_red = 2.0
+    st.session_state.y_red = 2
 if "z_red" not in st.session_state:
-    st.session_state.z_red = 0.0
+    st.session_state.z_red = 0
 
 if "x_yellow" not in st.session_state:
-    st.session_state.x_yellow = 5.0
+    st.session_state.x_yellow = 5
 if "y_yellow" not in st.session_state:
-    st.session_state.y_yellow = 0.0
+    st.session_state.y_yellow = 0
 if "z_yellow" not in st.session_state:
-    st.session_state.z_yellow = 1.0
+    st.session_state.z_yellow = 1
 
 st.markdown(
-    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG QUÉT TỌA ĐỘ ĐỎ (SÀN) & VÀNG"
-    " (TƯỜNG)"
+    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG ĐỌC TỌA ĐỘ SỐ NGUYÊN TẠI GIAO"
+    " ĐIỂM"
 )
 
 col_left, col_right = st.columns([1, 1.2])
@@ -33,8 +33,8 @@ col_left, col_right = st.columns([1, 1.2])
 with col_left:
     st.subheader("📷 1. Quét ArUco & Tự động đọc tọa độ ghim")
     st.info(
-        "Chụp tường (Oxz) để lấy tọa độ Drone (Vàng) | Chụp sàn (Oxy) để lấy"
-        " tọa độ Nạn nhân (Đỏ)."
+        "Tọa độ ghim tại các giao điểm lưới sẽ được quy ước tự động làm tròn"
+        " thành SỐ NGUYÊN."
     )
 
     tab_tuong, tab_san = st.tabs(
@@ -43,8 +43,8 @@ with col_left:
 
     with tab_tuong:
         st.markdown(
-            "**Mặt tường ($Oxz$):** Quét mã **ID 0, 1, 3** & Tự động tìm vị trí"
-            " **Ghim Vàng** (Drone)."
+            "**Mặt tường ($Oxz$):** Quét mã **ID 0, 1, 3** & Tự động đọc **Ghim"
+            " Vàng**."
         )
         img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
 
@@ -65,7 +65,6 @@ with col_left:
                     f"🎯 Đã phát hiện ArUco trên tường Oxz: `{list(flat_ids)}`"
                 )
 
-                # Thuật toán quét Ghim Vàng trên vách tường
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
                 h_img, w_img = img.shape[:2]
 
@@ -78,20 +77,20 @@ with col_left:
                     cX = int(M_yellow["m10"] / M_yellow["m00"])
                     cY = int(M_yellow["m01"] / M_yellow["m00"])
 
-                    # Quy đổi pixel sang tọa độ Oxz (X ngang, Z cao)
-                    auto_x = round(
-                        np.clip((cX / w_img) * 10.0, 0.0, 10.0), 1
+                    # LÀM TRÒN THÀNH SỐ NGUYÊN (INT)
+                    auto_x = int(
+                        round(np.clip((cX / w_img) * 10.0, 0.0, 10.0))
                     )
-                    auto_z = round(
-                        np.clip((1.0 - (cY / h_img)) * 10.0, 0.0, 10.0), 1
+                    auto_z = int(
+                        round(np.clip((1.0 - (cY / h_img)) * 10.0, 0.0, 10.0))
                     )
 
                     st.session_state.x_yellow = auto_x
                     st.session_state.z_yellow = auto_z
-                    st.session_state.y_yellow = 0.0  # Tường sau Y = 0
+                    st.session_state.y_yellow = 0
 
                     st.success(
-                        f"🤖 AI tự động tính Ghim Vàng (Drone): X = `{auto_x}`,"
+                        f"🤖 Tọa độ nguyên Ghim Vàng (Drone): X = `{auto_x}`,"
                         f" Z = `{auto_z}`"
                     )
                 else:
@@ -101,8 +100,8 @@ with col_left:
 
     with tab_san:
         st.markdown(
-            "**Mặt sàn ($Oxy$):** Quét mã **ID 0, 1, 2** & Tự động tìm vị trí"
-            " **Ghim Đỏ** (Nạn nhân)."
+            "**Mặt sàn ($Oxy$):** Quét mã **ID 0, 1, 2** & Tự động đọc **Ghim"
+            " Đỏ**."
         )
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
 
@@ -123,7 +122,6 @@ with col_left:
                     f"🎯 Đã phát hiện ArUco dưới sàn Oxy: `{list(flat_ids)}`"
                 )
 
-                # Thuật toán quét Ghim Đỏ dưới mặt sàn
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
                 h_img, w_img = img.shape[:2]
 
@@ -136,20 +134,20 @@ with col_left:
                     cX = int(M_red["m10"] / M_red["m00"])
                     cY = int(M_red["m01"] / M_red["m00"])
 
-                    # Quy đổi pixel sang tọa độ Oxy (X ngang, Y sâu)
-                    auto_x = round(
-                        np.clip((cX / w_img) * 10.0, 0.0, 10.0), 1
+                    # LÀM TRÒN THÀNH SỐ NGUYÊN (INT)
+                    auto_x = int(
+                        round(np.clip((cX / w_img) * 10.0, 0.0, 10.0))
                     )
-                    auto_y = round(
-                        np.clip((1.0 - (cY / h_img)) * 10.0, 0.0, 10.0), 1
+                    auto_y = int(
+                        round(np.clip((1.0 - (cY / h_img)) * 10.0, 0.0, 10.0))
                     )
 
                     st.session_state.x_red = auto_x
                     st.session_state.y_red = auto_y
-                    st.session_state.z_red = 0.0  # Nằm trên sàn Z = 0
+                    st.session_state.z_red = 0
 
                     st.success(
-                        f"🤖 AI tự động tính Ghim Đỏ (Nạn nhân): X = `{auto_x}`,"
+                        f"🤖 Tọa độ nguyên Ghim Đỏ (Nạn nhân): X = `{auto_x}`,"
                         f" Y = `{auto_y}`"
                     )
                 else:
@@ -158,22 +156,22 @@ with col_left:
                 st.error("❌ Không tìm thấy mã ArUco trên mặt sàn Oxy.")
 
     st.markdown("---")
-    st.markdown("#### ⚙️ Thiết lập & Hiệu chỉnh tọa độ không gian:")
+    st.markdown("#### ⚙️ Thiết lập & Hiệu chỉnh tọa độ nguyên:")
 
     # 🔴 Điểm Đỏ
     st.markdown("🔴 **Điểm Đỏ: Nạn nhân cứu trợ**")
     r1, r2, r3 = st.columns(3)
     with r1:
         x_red = st.number_input(
-            "X (Đỏ)", value=float(st.session_state.x_red), step=0.5, key="rx"
+            "X (Đỏ)", value=int(st.session_state.x_red), step=1, key="rx"
         )
     with r2:
         y_red = st.number_input(
-            "Y (Đỏ)", value=float(st.session_state.y_red), step=0.5, key="ry"
+            "Y (Đỏ)", value=int(st.session_state.y_red), step=1, key="ry"
         )
     with r3:
         z_red = st.number_input(
-            "Z (Đỏ)", value=float(st.session_state.z_red), step=0.5, key="rz"
+            "Z (Đỏ)", value=int(st.session_state.z_red), step=1, key="rz"
         )
 
     # 🟡 Điểm Vàng
@@ -181,24 +179,15 @@ with col_left:
     y1_col, y2_col, y3_col = st.columns(3)
     with y1_col:
         x_yellow = st.number_input(
-            "X (Vàng)",
-            value=float(st.session_state.x_yellow),
-            step=0.5,
-            key="yx",
+            "X (Vàng)", value=int(st.session_state.x_yellow), step=1, key="yx"
         )
     with y2_col:
         y_yellow = st.number_input(
-            "Y (Vàng)",
-            value=float(st.session_state.y_yellow),
-            step=0.5,
-            key="yy",
+            "Y (Vàng)", value=int(st.session_state.y_yellow), step=1, key="yy"
         )
     with y3_col:
         z_yellow = st.number_input(
-            "Z (Vàng)",
-            value=float(st.session_state.z_yellow),
-            step=0.5,
-            key="yz",
+            "Z (Vàng)", value=int(st.session_state.z_yellow), step=1, key="yz"
         )
 
     P_red = np.array([x_red, y_red, z_red])
@@ -241,20 +230,18 @@ with col_left:
     st.markdown("#### 📦 1. Kịch bản Thả hàng thẳng đứng")
     st.success(
         f"• Tọa độ điểm thả (giữ nguyên cao độ):"
-        f" `({P_drop_vertical[0]:.1f}, {P_drop_vertical[1]:.1f},"
-        f" {P_drop_vertical[2]:.1f})`"
+        f" `({P_drop_vertical[0]}, {P_drop_vertical[1]}, {P_drop_vertical[2]})`"
     )
 
     st.markdown("#### ✈️ 2. Kịch bản Thả hàng khi đang bay (Ném ngang)")
     st.info(
         f"• Vận tốc drone cố định: v = {v_drone} m/s\n"
-        f"• Độ cao drone (h): {h_meters:.1f} m (tương ứng {P_yellow[2]:.1f}"
-        f" km)\n"
+        f"• Độ cao drone (h): {h_meters:.1f} m (tương ứng {P_yellow[2]} km)\n"
         f"• Thời gian rơi (t): {t_fall:.2f} giây (với g = {g} m/s^2)\n"
         f"• Khoảng cách ngang cần thả trước (d): {d_horizontal_meters:.2f} m"
         f" (~{d_horizontal_km:.3f} km)\n"
         f"• Tọa độ điểm kích hoạt thả: `({P_release_flying[0]:.2f},"
-        f" {P_release_flying[1]:.2f}, {P_release_flying[2]:.1f})`"
+        f" {P_release_flying[1]:.2f}, {P_release_flying[2]})`"
     )
 
 with col_right:
@@ -334,6 +321,6 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Tự động quét Ghim Đỏ (Sàn) & Ghim Vàng"
-    " (Tường)."
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Quy ước tọa độ giao điểm làm tròn số"
+    " nguyên."
 )
