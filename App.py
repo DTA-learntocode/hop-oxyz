@@ -5,25 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Camera Tỷ Lệ 1:1", layout="wide"
-)
-
-# --- CSS TÙY CHỈNH CAMERA THÀNH TỶ LỆ 1:1 ---
-st.markdown(
-    """
-    <style>
-    /* Ép khung camera input hiển thị dạng vuông (1:1) và căn giữa */
-    [data-testid="stCameraInput"] video, 
-    [data-testid="stCameraInput"] img, 
-    [data-testid="stCameraInput"] div[data-testid="stImage"] {
-        aspect-ratio: 1 / 1 !important;
-        object-fit: cover !important;
-        max-width: 450px !important;
-        margin: auto !important;
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
+    page_title="Hộp Oxyz Thông Minh - Camera 16:9 & ArUco", layout="wide"
 )
 
 st.markdown(
@@ -33,10 +15,10 @@ st.markdown(
 col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
-    st.subheader("📷 1. Quét ArUco theo mặt phẳng (Tỷ lệ 1:1)")
+    st.subheader("📷 1. Quét ArUco theo mặt phẳng (Khung hình 16:9)")
     st.info(
-        "Giao diện camera đã được tối ưu về khung vuông 1:1, giúp bạn canh góc"
-        " chụp sa bàn chuẩn xác."
+        "Chụp tách rời với khung hình rộng 16:9 giúp bao quát trọn vẹn sa bàn"
+        " và nhận diện chính xác các mã ArUco."
     )
 
     # Chia tab chụp ảnh chuẩn Oxz và Oxy
@@ -280,5 +262,6 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Camera tỷ lệ 1:1 & Mô phỏng Vật lý 3D."
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Camera tỷ lệ 16:9 chuẩn & Mô phỏng"
+    " Vật lý 3D."
 )
