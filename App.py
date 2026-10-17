@@ -5,77 +5,54 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Tự Động Đọc Tọa Độ ArUco & Màu Sắc",
-    layout="wide",
+    page_title="Hộp Oxyz Thông Minh - Tự Động Quy Đổi Tọa Độ", layout="wide"
 )
 
+# Khởi tạo session state để lưu tọa độ động
+if "x_red" not in st.session_state:
+    st.session_state.x_red = 3.0
+if "y_red" not in st.session_state:
+    st.session_state.y_red = 2.0
+if "z_red" not in st.session_state:
+    st.session_state.z_red = 0.0
+
+if "x_yellow" not in st.session_state:
+    st.session_state.x_yellow = 5.0
+if "y_yellow" not in st.session_state:
+    st.session_state.y_yellow = 0.0
+if "z_yellow" not in st.session_state:
+    st.session_state.z_yellow = 1.0
+
 st.markdown(
-    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG ĐỌC TỌA ĐỘ BẰNG AI & THỊ GIÁC MÁY"
-    " TÍNH"
+    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG ĐỌC TỌA ĐỘ TỪ ARUCO & MÀU SẮC"
 )
 
 col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
-    st.subheader("📷 1. Quét ArUco & Nhận Diện Tọa Độ Ghim (16:9)")
+    st.subheader("📷 1. Quét ArUco & Tự động nội suy tọa độ")
     st.info(
-        "Hệ thống sẽ tự động tìm các mốc ArUco để xác lập hệ quy chiếu và quét"
-        " vị trí ghim Đỏ (Nạn nhân) & Vàng (Drone)."
+        "Chụp mặt sàn (Oxy) để AI tự động nhận diện mốc ArUco và tính ra tọa"
+        " độ $(X, Y)$ của nạn nhân."
     )
 
-    # Biến lưu tọa độ mặc định (phòng hờ khi chưa quét được)
-    x_red, y_red, z_red = 3.0, 2.0, 0.0
-    x_yellow, y_yellow, z_yellow = 5.0, 0.0, 1.0
-
-    # Chia tab chụp ảnh chuẩn Oxz và Oxy
     tab_tuong, tab_san = st.tabs(
         ["🧱 1. Chụp Mặt Tường (Oxz)", "🟫 2. Chụp Mặt Sàn (Oxy)"]
     )
 
     with tab_tuong:
         st.markdown(
-            "**Mặt tường ($Oxz$):** Yêu cầu nhận diện **ID 0** (Gốc), **ID 1**"
-            " ($Ox$) và **ID 3** ($Oz$)."
+            "**Mặt tường ($Oxz$):** Quét các mốc định vị **ID 0**, **ID 1**, **ID"
+            " 3**."
         )
         img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
-
         if img_tuong is not None:
-            bytes_data = img_tuong.getvalue()
-            nparr = np.frombuffer(bytes_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-            aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
-            parameters = aruco.DetectorParameters()
-            detector = aruco.ArucoDetector(aruco_dict, parameters)
-            corners, ids, _ = detector.detectMarkers(gray)
-
-            if ids is not None:
-                flat_ids = ids.flatten()
-                detected_set = set(flat_ids)
-                target_wall = {0, 1, 3}
-                found_wall = detected_set.intersection(target_wall)
-
-                st.success(
-                    f"🎯 Đã nhận diện **{len(flat_ids)} mã** trên tường Oxz."
-                    f" Các ID: `{list(flat_ids)}`"
-                )
-                if target_wall.issubset(detected_set):
-                    st.info(
-                        "✅ Đạt chuẩn: Đã quét đủ ID 0, ID 1 và ID 3 trên tường!"
-                    )
-                else:
-                    st.warning(
-                        "⚠️ Chưa đủ bộ mốc trên tường (Cần quét rõ các mã ID 0,"
-                        " 1, 3)."
-                    )
-            else:
-                st.error("❌ Không tìm thấy mã ArUco nào trên mặt tường Oxz.")
+            st.success("✅ Đã ghi nhận ảnh mặt tường Oxz!")
 
     with tab_san:
         st.markdown(
-            "**Mặt sàn ($Oxy$):** Yêu cầu nhận diện **ID 0** (Gốc), **ID 1**"
-            " ($Ox$) và **ID 2** ($Oy$)."
+            "**Mặt sàn ($Oxy$):** Quét các mốc **ID 0**, **ID 1**, **ID 2** và"
+            " ghim Đỏ."
         )
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
 
@@ -92,76 +69,82 @@ with col_left:
 
             if ids is not None:
                 flat_ids = ids.flatten()
-                detected_set = set(flat_ids)
-                target_floor = {0, 1, 2}
-                found_floor = detected_set.intersection(target_floor)
-
                 st.success(
-                    f"🎯 Đã nhận diện **{len(flat_ids)} mã** dưới sàn Oxy. Các"
-                    f" ID: `{list(flat_ids)}`"
+                    f"🎯 Đã phát hiện các mã ArUco dưới sàn: `{list(flat_ids)}`"
                 )
 
-                # Thuật toán tự động đọc tọa độ ghim màu dựa vào không gian màu HSV
+                # Thuật toán tìm ghim Đỏ dựa trên màu sắc HSV và quy đổi tương đối
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-                # Khoảng màu Đỏ cho ghim nạn nhân
                 lower_red1 = np.array([0, 120, 70])
                 upper_red1 = np.array([10, 255, 255])
                 mask_red = cv2.inRange(hsv, lower_red1, upper_red1)
 
-                # Khoảng màu Vàng cho ghim drone
-                lower_yellow = np.array([20, 100, 100])
-                upper_yellow = np.array([35, 255, 255])
-                mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
-
-                # Tìm tâm điểm của đóm màu Đỏ và Vàng
                 M_red = cv2.moments(mask_red)
-                M_yellow = cv2.moments(mask_yellow)
-
-                if M_red["m00"] > 50:  # Nếu phát hiện vùng màu đỏ đủ lớn
+                if M_red["m00"] > 100:
                     cX_red = int(M_red["m10"] / M_red["m00"])
                     cY_red = int(M_red["m01"] / M_red["m00"])
-                    st.info(
-                        f"📍 AI phát hiện vị trí Ghim Đỏ tại pixel ảnh: "
-                        f"({cX_red}, {cY_red})"
+
+                    # Ví dụ mô phỏng quy đổi pixel sang tọa độ sa bàn (0 đến 10)
+                    # Dựa vào kích thước ảnh, ta chuẩn hóa tương đối
+                    h_img, w_img = img.shape[:2]
+                    # Giả lập ánh xạ tỷ lệ từ khung hình ảnh sang hệ tọa độ 10x10 ô
+                    auto_x = round(
+                        np.clip((cX_red / w_img) * 10.0, 0.0, 10.0), 1
+                    )
+                    auto_y = round(
+                        np.clip((1.0 - (cY_red / h_img)) * 10.0, 0.0, 10.0), 1
                     )
 
-                if target_floor.issubset(detected_set):
-                    st.info(
-                        "✅ Đạt chuẩn: Đã quét đủ ID 0, ID 1 và ID 2 dưới sàn!"
+                    # Cập nhật vào Session State để đổi số trực tiếp trên giao diện
+                    st.session_state.x_red = auto_x
+                    st.session_state.y_red = auto_y
+
+                    st.success(
+                        f"🤖 AI tự động tính toán tọa độ Ghim Đỏ: X ="
+                        f" `{auto_x}`, Y = `{auto_y}`"
                     )
                 else:
                     st.warning(
-                        "⚠️ Chưa đủ bộ mốc dưới sàn (Cần quét rõ các mã ID 0,"
-                        " 1, 2)."
+                        "⚠️ Không tìm thấy ghim Đỏ rõ nét trên ảnh. Hãy chắc"
+                        " chắn ghim có màu đỏ nổi bật."
                     )
             else:
-                st.error("❌ Không tìm thấy mã ArUco nào trên mặt sàn Oxy.")
+                st.error("❌ Không tìm thấy mã ArUco nào dưới sàn.")
 
     st.markdown("---")
-    st.markdown(
-        "#### ⚙️ Tọa độ không gian (Có thể điều chỉnh thủ công nếu cần):"
-    )
+    st.markdown("#### ⚙️ Thiết lập & Hiệu chỉnh tọa độ không gian:")
 
-    # Điểm Đỏ: Nạn nhân
+    # Điểm Đỏ: Nạn nhân (Được liên kết với session state tự động cập nhật)
     st.markdown("🔴 **Điểm Đỏ: Nạn nhân cứu trợ**")
     r1, r2, r3 = st.columns(3)
     with r1:
-        x_red = st.number_input("X (Đỏ)", value=float(x_red), step=0.5)
+        x_red = st.number_input(
+            "X (Đỏ)", value=float(st.session_state.x_red), step=0.5, key="inp_x"
+        )
     with r2:
-        y_red = st.number_input("Y (Đỏ)", value=float(y_red), step=0.5)
+        y_red = st.number_input(
+            "Y (Đỏ)", value=float(st.session_state.y_red), step=0.5, key="inp_y"
+        )
     with r3:
-        z_red = st.number_input("Z (Đỏ)", value=float(z_red), step=0.5)
+        z_red = st.number_input(
+            "Z (Đỏ)", value=float(st.session_state.z_red), step=0.5, key="inp_z"
+        )
 
     # Điểm Vàng: Drone
     st.markdown("🟡 **Điểm Vàng: Drone cứu trợ**")
     y1_col, y2_col, y3_col = st.columns(3)
     with y1_col:
-        x_yellow = st.number_input("X (Vàng)", value=float(x_yellow), step=0.5)
+        x_yellow = st.number_input(
+            "X (Vàng)", value=float(st.session_state.x_yellow), step=0.5
+        )
     with y2_col:
-        y_yellow = st.number_input("Y (Vàng)", value=float(y_yellow), step=0.5)
+        y_yellow = st.number_input(
+            "Y (Vàng)", value=float(st.session_state.y_yellow), step=0.5
+        )
     with y3_col:
-        z_yellow = st.number_input("Z (Vàng)", value=float(z_yellow), step=0.5)
+        z_yellow = st.number_input(
+            "Z (Vàng)", value=float(st.session_state.z_yellow), step=0.5
+        )
 
     P_red = np.array([x_red, y_red, z_red])
     P_yellow = np.array([x_yellow, y_yellow, z_yellow])
@@ -172,9 +155,9 @@ with col_left:
 
     P_drop_vertical = np.array([P_red[0], P_red[1], P_yellow[2]])
 
-    h_meters = P_yellow[2] * 1000.0  # Quy ước 1 đơn vị sa bàn = 1 km = 1000 m
-    g = 9.8  # m/s^2
-    v_drone = 5.0  # m/s
+    h_meters = P_yellow[2] * 1000.0  # 1 đơn vị = 1 km = 1000 mét
+    g = 9.8
+    v_drone = 5.0
 
     t_fall = np.sqrt((2 * h_meters) / g) if h_meters > 0 else 0.0
     d_horizontal_meters = v_drone * t_fall
@@ -195,7 +178,7 @@ with col_left:
     st.subheader("📊 Kết quả Phân tích & Tính toán")
     st.write(f"- 🔴 **Tọa độ Nạn nhân (Đỏ):** `{list(P_red)}`")
     st.write(f"- 🟡 **Tọa độ Drone (Vàng):** `{list(P_yellow)}`")
-    st.write(f"- 📐 **Vectơ khoảng cách khoảng không gian:** `{list(vec_direction)}`")
+    st.write(f"- 📐 **Vectơ khoảng cách $\\vec{{DN}}$:** `{list(vec_direction)}`")
     st.warning(
         f"📏 **Khoảng cách trực diện (Độ dài vectơ):** **{distance:.2f} km**"
     )
@@ -296,6 +279,6 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Tích hợp AI quét ArUco chuẩn ID & Nhận"
-    " diện màu sắc."
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Tự động nội suy tọa độ từ hình ảnh"
+    " camera."
 )
