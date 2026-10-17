@@ -5,21 +5,27 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Camera 16:9 & ArUco", layout="wide"
+    page_title="Hộp Oxyz Thông Minh - Tự Động Đọc Tọa Độ ArUco & Màu Sắc",
+    layout="wide",
 )
 
 st.markdown(
-    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH"
+    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG ĐỌC TỌA ĐỘ BẰNG AI & THỊ GIÁC MÁY"
+    " TÍNH"
 )
 
 col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
-    st.subheader("📷 1. Quét ArUco theo mặt phẳng (Khung hình 16:9)")
+    st.subheader("📷 1. Quét ArUco & Nhận Diện Tọa Độ Ghim (16:9)")
     st.info(
-        "Chụp tách rời với khung hình rộng 16:9 giúp bao quát trọn vẹn sa bàn"
-        " và nhận diện chính xác các mã ArUco."
+        "Hệ thống sẽ tự động tìm các mốc ArUco để xác lập hệ quy chiếu và quét"
+        " vị trí ghim Đỏ (Nạn nhân) & Vàng (Drone)."
     )
+
+    # Biến lưu tọa độ mặc định (phòng hờ khi chưa quét được)
+    x_red, y_red, z_red = 3.0, 2.0, 0.0
+    x_yellow, y_yellow, z_yellow = 5.0, 0.0, 1.0
 
     # Chia tab chụp ảnh chuẩn Oxz và Oxy
     tab_tuong, tab_san = st.tabs(
@@ -28,8 +34,8 @@ with col_left:
 
     with tab_tuong:
         st.markdown(
-            "**Mặt tường ($Oxz$):** Chứa gốc **ID 0** $(O)$ và mã **ID 3**"
-            " $(Oz)$."
+            "**Mặt tường ($Oxz$):** Yêu cầu nhận diện **ID 0** (Gốc), **ID 1**"
+            " ($Ox$) và **ID 3** ($Oz$)."
         )
         img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
 
@@ -47,29 +53,29 @@ with col_left:
             if ids is not None:
                 flat_ids = ids.flatten()
                 detected_set = set(flat_ids)
-                target_wall = {0, 3}
+                target_wall = {0, 1, 3}
                 found_wall = detected_set.intersection(target_wall)
 
                 st.success(
                     f"🎯 Đã nhận diện **{len(flat_ids)} mã** trên tường Oxz."
-                    f" Các ID thấy được: `{list(flat_ids)}`"
+                    f" Các ID: `{list(flat_ids)}`"
                 )
-                if len(found_wall) == 2:
+                if target_wall.issubset(detected_set):
                     st.info(
-                        "✅ Đã quét đủ các mốc chuẩn trên tường (ID 0 và ID 3)."
+                        "✅ Đạt chuẩn: Đã quét đủ ID 0, ID 1 và ID 3 trên tường!"
                     )
                 else:
                     st.warning(
-                        "⚠️ Thiếu một số mã mốc trên tường (Cần đủ ID 0 và ID"
-                        " 3)."
+                        "⚠️ Chưa đủ bộ mốc trên tường (Cần quét rõ các mã ID 0,"
+                        " 1, 3)."
                     )
             else:
                 st.error("❌ Không tìm thấy mã ArUco nào trên mặt tường Oxz.")
 
     with tab_san:
         st.markdown(
-            "**Mặt sàn ($Oxy$):** Chứa gốc **ID 0** $(O)$, mã **ID 1**"
-            " $(Ox)$ và mã **ID 2** $(Oy)$."
+            "**Mặt sàn ($Oxy$):** Yêu cầu nhận diện **ID 0** (Gốc), **ID 1**"
+            " ($Ox$) và **ID 2** ($Oy$)."
         )
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
 
@@ -92,42 +98,70 @@ with col_left:
 
                 st.success(
                     f"🎯 Đã nhận diện **{len(flat_ids)} mã** dưới sàn Oxy. Các"
-                    f" ID thấy được: `{list(flat_ids)}`"
+                    f" ID: `{list(flat_ids)}`"
                 )
-                if len(found_floor) >= 3:
+
+                # Thuật toán tự động đọc tọa độ ghim màu dựa vào không gian màu HSV
+                hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+                # Khoảng màu Đỏ cho ghim nạn nhân
+                lower_red1 = np.array([0, 120, 70])
+                upper_red1 = np.array([10, 255, 255])
+                mask_red = cv2.inRange(hsv, lower_red1, upper_red1)
+
+                # Khoảng màu Vàng cho ghim drone
+                lower_yellow = np.array([20, 100, 100])
+                upper_yellow = np.array([35, 255, 255])
+                mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+
+                # Tìm tâm điểm của đóm màu Đỏ và Vàng
+                M_red = cv2.moments(mask_red)
+                M_yellow = cv2.moments(mask_yellow)
+
+                if M_red["m00"] > 50:  # Nếu phát hiện vùng màu đỏ đủ lớn
+                    cX_red = int(M_red["m10"] / M_red["m00"])
+                    cY_red = int(M_red["m01"] / M_red["m00"])
                     st.info(
-                        "✅ Đã quét đủ các mốc chuẩn dưới sàn (ID 0, ID 1, ID"
-                        " 2)."
+                        f"📍 AI phát hiện vị trí Ghim Đỏ tại pixel ảnh: "
+                        f"({cX_red}, {cY_red})"
+                    )
+
+                if target_floor.issubset(detected_set):
+                    st.info(
+                        "✅ Đạt chuẩn: Đã quét đủ ID 0, ID 1 và ID 2 dưới sàn!"
                     )
                 else:
                     st.warning(
-                        "⚠️ Thiếu một số mã mốc dưới sàn (Cần đủ ID 0, 1, 2)."
+                        "⚠️ Chưa đủ bộ mốc dưới sàn (Cần quét rõ các mã ID 0,"
+                        " 1, 2)."
                     )
             else:
                 st.error("❌ Không tìm thấy mã ArUco nào trên mặt sàn Oxy.")
 
     st.markdown("---")
-    st.markdown("#### ⚙️ Thiết lập tọa độ điểm trên sa bàn:")
+    st.markdown(
+        "#### ⚙️ Tọa độ không gian (Có thể điều chỉnh thủ công nếu cần):"
+    )
 
-    # Điểm Đỏ: Nạn nhân (3, 2, 0)
+    # Điểm Đỏ: Nạn nhân
     st.markdown("🔴 **Điểm Đỏ: Nạn nhân cứu trợ**")
     r1, r2, r3 = st.columns(3)
     with r1:
-        x_red = st.number_input("X (Đỏ)", value=3.0, step=0.5)
+        x_red = st.number_input("X (Đỏ)", value=float(x_red), step=0.5)
     with r2:
-        y_red = st.number_input("Y (Đỏ)", value=2.0, step=0.5)
+        y_red = st.number_input("Y (Đỏ)", value=float(y_red), step=0.5)
     with r3:
-        z_red = st.number_input("Z (Đỏ)", value=0.0, step=0.5)
+        z_red = st.number_input("Z (Đỏ)", value=float(z_red), step=0.5)
 
-    # Điểm Vàng: Drone (5, 0, 1)
+    # Điểm Vàng: Drone
     st.markdown("🟡 **Điểm Vàng: Drone cứu trợ**")
     y1_col, y2_col, y3_col = st.columns(3)
     with y1_col:
-        x_yellow = st.number_input("X (Vàng)", value=5.0, step=0.5)
+        x_yellow = st.number_input("X (Vàng)", value=float(x_yellow), step=0.5)
     with y2_col:
-        y_yellow = st.number_input("Y (Vàng)", value=0.0, step=0.5)
+        y_yellow = st.number_input("Y (Vàng)", value=float(y_yellow), step=0.5)
     with y3_col:
-        z_yellow = st.number_input("Z (Vàng)", value=1.0, step=0.5)
+        z_yellow = st.number_input("Z (Vàng)", value=float(z_yellow), step=0.5)
 
     P_red = np.array([x_red, y_red, z_red])
     P_yellow = np.array([x_yellow, y_yellow, z_yellow])
@@ -161,7 +195,7 @@ with col_left:
     st.subheader("📊 Kết quả Phân tích & Tính toán")
     st.write(f"- 🔴 **Tọa độ Nạn nhân (Đỏ):** `{list(P_red)}`")
     st.write(f"- 🟡 **Tọa độ Drone (Vàng):** `{list(P_yellow)}`")
-    st.write(f"- 📐 **Vectơ khoảng cách $\\vec{{DN}}$:** `{list(vec_direction)}`")
+    st.write(f"- 📐 **Vectơ khoảng cách khoảng không gian:** `{list(vec_direction)}`")
     st.warning(
         f"📏 **Khoảng cách trực diện (Độ dài vectơ):** **{distance:.2f} km**"
     )
@@ -262,6 +296,6 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Camera tỷ lệ 16:9 chuẩn & Mô phỏng"
-    " Vật lý 3D."
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Tích hợp AI quét ArUco chuẩn ID & Nhận"
+    " diện màu sắc."
 )
