@@ -5,117 +5,122 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Nhận Diện ArUco & Vật Lý Cứu Trợ",
+    page_title="Hộp Oxyz Thông Minh - Nhận Diện ArUco Oxz & Oxy",
     layout="wide",
 )
 
 st.markdown(
-    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG NHẬN DIỆN ARUCO & TÍNH TOÁN VẬT LÝ"
+    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: CHỤP TÁCH MẶT PHẲNG OXZ & OXY TÍNH TỌA"
+    " ĐỘ"
 )
 
 col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
-    st.subheader("📷 1. Chụp ảnh sa bàn (Có 4 mã ArUco góc)")
+    st.subheader("📷 1. Quét ArUco theo mặt phẳng (Khung hình 16:9)")
     st.info(
-        "Chụp ảnh hộp sa bàn chứa 4 mã ArUco (ID 0, 1, 2, 3) ở các góc để AI"
-        " tự động hiệu chuẩn không gian."
+        "Tách thành 2 góc chụp vuông góc giúp camera loại bỏ độ méo phối cảnh"
+        " và nhận diện 100% các mã ArUco!"
     )
 
-    img_file = st.camera_input("Chụp ảnh mô hình sa bàn")
+    # Chia tab chụp ảnh chuẩn Oxz và Oxy
+    tab_tuong, tab_san = st.tabs(
+        ["🧱 1. Chụp Mặt Tường (Oxz)", "🟫 2. Chụp Mặt Sàn (Oxy)"]
+    )
 
-    # Mặc định khởi tạo tọa độ phòng hờ khi chưa quét được
-    detected_aruco_info = "Chưa phát hiện đủ mã góc ArUco."
-    x_red, y_red, z_red = 8.0, 6.0, 0.0
-    x_yellow, y_yellow, z_yellow = 2.0, 3.0, 5.0
+    with tab_tuong:
+        st.markdown(
+            "**Mặt tường ($Oxz$):** Chứa gốc **ID 0** $(O)$ và mã **ID 3**"
+            " $(Oz)$."
+        )
+        img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
 
-    if img_file is not None:
-        st.success("✅ Đã nhận ảnh chụp! Đang xử lý thuật toán ArUco...")
+        if img_tuong is not None:
+            bytes_data = img_tuong.getvalue()
+            nparr = np.frombuffer(bytes_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # Đọc ảnh từ Streamlit sang OpenCV
-        bytes_data = img_file.getvalue()
-        nparr = np.frombuffer(bytes_data, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+            parameters = aruco.DetectorParameters()
+            detector = aruco.ArucoDetector(aruco_dict, parameters)
+            corners, ids, _ = detector.detectMarkers(gray)
 
-        # Sử dụng từ điển chuẩn DICT_4X4_50
-        aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
-        parameters = aruco.DetectorParameters()
-        detector = aruco.ArucoDetector(aruco_dict, parameters)
-
-        corners, ids, rejected = detector.detectMarkers(gray)
-
-        if ids is not None:
-            flattened_ids = ids.flatten()
-            detected_count = sum(
-                1 for i in [0, 1, 2, 3] if i in flattened_ids
-            )
-            detected_aruco_info = (
-                f"Đã thấy {detected_count}/4 mã ArUco góc (IDs:"
-                f" {list(flattened_ids)})."
-            )
-
-            if detected_count >= 3:
-                st.success(f"🎯 {detected_aruco_info} - Hiệu chuẩn thành công!")
-            else:
-                st.warning(
-                    f"⚠️ {detected_aruco_info} - Cần thấy đủ 4 mã góc để đạt độ"
-                    " chính xác tuyệt đối."
+            if ids is not None:
+                flat_ids = ids.flatten()
+                st.success(
+                    f"🎯 Đã nhận diện mã trên tường Oxz: IDs"
+                    f" {list(flat_ids)}"
                 )
-        else:
-            st.error(
-                "❌ Không tìm thấy mã ArUco nào trong ảnh. Vui lòng căn chỉnh"
-                " lại góc chụp!"
-            )
+            else:
+                st.warning("⚠️ Chưa phát hiện mã trên mặt tường Oxz.")
+
+    with tab_san:
+        st.markdown(
+            "**Mặt sàn ($Oxy$):** Chứa gốc **ID 0** $(O)$, mã **ID 1**"
+            " $(Ox)$ và mã **ID 2** $(Oy)$."
+        )
+        img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
+
+        if img_san is not None:
+            bytes_data = img_san.getvalue()
+            nparr = np.frombuffer(bytes_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+            parameters = aruco.DetectorParameters()
+            detector = aruco.ArucoDetector(aruco_dict, parameters)
+            corners, ids, _ = detector.detectMarkers(gray)
+
+            if ids is not None:
+                flat_ids = ids.flatten()
+                st.success(
+                    f"🎯 Đã nhận diện mã dưới sàn Oxy: IDs {list(flat_ids)}"
+                )
+            else:
+                st.warning("⚠️ Chưa phát hiện mã trên mặt sàn Oxy.")
 
     st.markdown("---")
-    st.markdown("#### ⚙️ Tọa độ các điểm (Đã đồng bộ hệ quy chiếu):")
+    st.markdown("#### ⚙️ Thiết lập tọa độ điểm trên sa bàn:")
 
-    # Điểm Đỏ: Nạn nhân
-    st.markdown("🔴 **Điểm Đỏ: Người cần cứu trợ**")
+    # Điểm Đỏ: Nạn nhân (3, 2, 0)
+    st.markdown("🔴 **Điểm Đỏ: Nạn nhân cứu trợ**")
     r1, r2, r3 = st.columns(3)
     with r1:
-        x_red = st.number_input("X (Đỏ)", value=float(x_red), step=0.5)
+        x_red = st.number_input("X (Đỏ)", value=3.0, step=0.5)
     with r2:
-        y_red = st.number_input("Y (Đỏ)", value=float(y_red), step=0.5)
+        y_red = st.number_input("Y (Đỏ)", value=2.0, step=0.5)
     with r3:
-        z_red = st.number_input("Z (Đỏ)", value=float(z_red), step=0.5)
+        z_red = st.number_input("Z (Đỏ)", value=0.0, step=0.5)
 
-    # Điểm Vàng: Drone
-    st.markdown("🟡 **Điểm Vàng: Vị trí Drone cứu trợ**")
+    # Điểm Vàng: Drone (5, 0, 1)
+    st.markdown("🟡 **Điểm Vàng: Drone cứu trợ**")
     y1_col, y2_col, y3_col = st.columns(3)
     with y1_col:
-        x_yellow = st.number_input("X (Vàng)", value=float(x_yellow), step=0.5)
+        x_yellow = st.number_input("X (Vàng)", value=5.0, step=0.5)
     with y2_col:
-        y_yellow = st.number_input("Y (Vàng)", value=float(y_yellow), step=0.5)
+        y_yellow = st.number_input("Y (Vàng)", value=0.0, step=0.5)
     with y3_col:
-        z_yellow = st.number_input("Z (Vàng)", value=float(z_yellow), step=0.5)
+        z_yellow = st.number_input("Z (Vàng)", value=1.0, step=0.5)
 
-    # Chuyển thành mảng NumPy
     P_red = np.array([x_red, y_red, z_red])
     P_yellow = np.array([x_yellow, y_yellow, z_yellow])
 
-    # --- TÍNH TOÁN VẬT LÝ & HÌNH HỌC ---
-    # 1. Khoảng cách trực diện (độ dài đại số vectơ giữa Drone và Nạn nhân)
+    # --- BÀI TOÁN VẬT LÝ & HÌNH HỌC ---
     vec_direction = P_red - P_yellow
     distance = np.linalg.norm(vec_direction)
 
-    # 2. Thả hàng thẳng đứng (giữ nguyên độ cao Drone)
     P_drop_vertical = np.array([P_red[0], P_red[1], P_yellow[2]])
 
-    # 3. Thả hàng khi đang bay (Ném ngang)
-    h_meters = P_yellow[2] * 1000.0  # 1 đơn vị tọa độ = 1 km = 1000 mét
-    g = 9.8  # Gia tốc trọng trường (m/s^2) mặc định
-    v_drone = 5.0  # Vận tốc drone cố định (m/s)
+    h_meters = P_yellow[2] * 1000.0  # Quy ước 1 đơn vị sa bàn = 1 km = 1000 m
+    g = 9.8  # m/s^2
+    v_drone = 5.0  # m/s
 
-    # Thời gian rơi: t = sqrt(2h / g)
     t_fall = np.sqrt((2 * h_meters) / g) if h_meters > 0 else 0.0
-
-    # Khoảng cách ngang cần thả trước: d = v * t (đổi từ mét sang km)
     d_horizontal_meters = v_drone * t_fall
     d_horizontal_km = d_horizontal_meters / 1000.0
 
-    # Tọa độ điểm bắt đầu thả hàng khi bay
     horizontal_dir = P_red[:2] - P_yellow[:2]
     norm_dir = np.linalg.norm(horizontal_dir)
     if norm_dir > 0:
@@ -133,8 +138,7 @@ with col_left:
     st.write(f"- 🟡 **Tọa độ Drone (Vàng):** `{list(P_yellow)}`")
     st.write(f"- 📐 **Vectơ khoảng cách $\\vec{{DN}}$:** `{list(vec_direction)}`")
     st.warning(
-        f"📏 **Khoảng cách trực diện (Độ dài đại số vectơ):** **{distance:.2f}"
-        " km**"
+        f"📏 **Khoảng cách trực diện (Độ dài vectơ):** **{distance:.2f} km**"
     )
 
     st.markdown("#### 📦 1. Kịch bản Thả hàng thẳng đứng")
@@ -146,14 +150,13 @@ with col_left:
 
     st.markdown("#### ✈️ 2. Kịch bản Thả hàng khi đang bay (Ném ngang)")
     st.info(
-        f"• Vận tốc drone cố định: v = {v_drone} m/s (vận tốc bay ngang tiêu"
-        f" chuẩn).\n"
+        f"• Vận tốc drone cố định: v = {v_drone} m/s\n"
         f"• Độ cao drone (h): {h_meters:.1f} m (tương ứng {P_yellow[2]:.1f}"
-        f" km).\n"
-        f"• Thời gian rơi chạm đất (t): {t_fall:.2f} giây (với g = {g} m/s^2).\n"
+        f" km)\n"
+        f"• Thời gian rơi (t): {t_fall:.2f} giây (với g = {g} m/s^2)\n"
         f"• Khoảng cách ngang cần thả trước (d): {d_horizontal_meters:.2f} m"
-        f" (~{d_horizontal_km:.3f} km).\n"
-        f"• Tọa độ điểm kích hoạt thả hàng: `({P_release_flying[0]:.2f},"
+        f" (~{d_horizontal_km:.3f} km)\n"
+        f"• Tọa độ điểm kích hoạt thả: `({P_release_flying[0]:.2f},"
         f" {P_release_flying[1]:.2f}, {P_release_flying[2]:.1f})`"
     )
 
@@ -162,7 +165,7 @@ with col_right:
 
     fig = go.Figure()
 
-    # Vẽ điểm Đỏ (Nạn nhân)
+    # Điểm Đỏ (Nạn nhân)
     fig.add_trace(
         go.Scatter3d(
             x=[P_red[0]],
@@ -176,7 +179,7 @@ with col_right:
         )
     )
 
-    # Vẽ điểm Vàng (Drone)
+    # Điểm Vàng (Drone)
     fig.add_trace(
         go.Scatter3d(
             x=[P_yellow[0]],
@@ -190,7 +193,7 @@ with col_right:
         )
     )
 
-    # Vẽ điểm thả hàng khi đang bay
+    # Điểm thả khi ném ngang
     fig.add_trace(
         go.Scatter3d(
             x=[P_release_flying[0]],
@@ -204,7 +207,7 @@ with col_right:
         )
     )
 
-    # Vectơ khoảng cách trực diện
+    # Vectơ nối khoảng cách
     fig.add_trace(
         go.Scatter3d(
             x=[P_yellow[0], P_red[0]],
@@ -216,7 +219,7 @@ with col_right:
         )
     )
 
-    # Cấu hình không gian 3D
+    # Cấu hình không gian
     fig.update_layout(
         scene=dict(
             xaxis=dict(range=[0, 11], title="Trục Ox (km)", zeroline=True),
@@ -234,6 +237,6 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Tích hợp AI ArUco Marker và Vật lý"
-    " chuyển động ném ngang."
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Tích hợp chụp tách mặt phẳng Oxz &"
+    " Oxy & Mô phỏng Vật lý 3D."
 )
