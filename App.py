@@ -5,7 +5,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Quy Ước Số Nguyên", layout="wide"
+    page_title="Hộp Oxyz Thông Minh - Check ID & Tọa Độ Số Nguyên",
+    layout="wide",
 )
 
 # Session state lưu tọa độ SỐ NGUYÊN (int)
@@ -24,8 +25,7 @@ if "z_yellow" not in st.session_state:
     st.session_state.z_yellow = 1
 
 st.markdown(
-    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: TỰ ĐỘNG ĐỌC TỌA ĐỘ SỐ NGUYÊN TẠI GIAO"
-    " ĐIỂM"
+    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: CHECK BỘ MÃ ARUCO & TỌA ĐỘ SỐ NGUYÊN"
 )
 
 col_left, col_right = st.columns([1, 1.2])
@@ -33,8 +33,8 @@ col_left, col_right = st.columns([1, 1.2])
 with col_left:
     st.subheader("📷 1. Quét ArUco & Tự động đọc tọa độ ghim")
     st.info(
-        "Tọa độ ghim tại các giao điểm lưới sẽ được quy ước tự động làm tròn"
-        " thành SỐ NGUYÊN."
+        "Hệ thống sẽ kiểm tra bộ mã ArUco tương ứng trên từng mặt và làm tròn"
+        " tọa độ về số nguyên."
     )
 
     tab_tuong, tab_san = st.tabs(
@@ -43,8 +43,8 @@ with col_left:
 
     with tab_tuong:
         st.markdown(
-            "**Mặt tường ($Oxz$):** Quét mã **ID 0, 1, 3** & Tự động đọc **Ghim"
-            " Vàng**."
+            "**Mặt tường ($Oxz$):** Cần đủ mã **ID 0** (Gốc), **ID 1** ($Ox$)"
+            " và **ID 3** ($Oz$)."
         )
         img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
 
@@ -61,10 +61,27 @@ with col_left:
 
             if ids is not None:
                 flat_ids = ids.flatten()
+                detected_set = set(flat_ids)
+                target_wall = {0, 1, 3}
+
                 st.success(
-                    f"🎯 Đã phát hiện ArUco trên tường Oxz: `{list(flat_ids)}`"
+                    f"🎯 Đã phát hiện **{len(flat_ids)} mã** ArUco trên tường"
+                    f" Oxz: `{list(flat_ids)}`"
                 )
 
+                # KIỂM TRA CHECK ĐỦ BỘ MÃ ID
+                if target_wall.issubset(detected_set):
+                    st.info(
+                        "✅ Đã quét ĐỦ BỘ MỐC CHUẨN trên mặt tường (ID 0, ID 1,"
+                        " ID 3)!"
+                    )
+                else:
+                    st.warning(
+                        "⚠️ Chưa đủ mốc chuẩn trên tường (Cần quét rõ các mã ID"
+                        " 0, 1, 3)."
+                    )
+
+                # Thuật toán quét Ghim Vàng
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
                 h_img, w_img = img.shape[:2]
 
@@ -77,7 +94,7 @@ with col_left:
                     cX = int(M_yellow["m10"] / M_yellow["m00"])
                     cY = int(M_yellow["m01"] / M_yellow["m00"])
 
-                    # LÀM TRÒN THÀNH SỐ NGUYÊN (INT)
+                    # Quy đổi & làm tròn thành số nguyên
                     auto_x = int(
                         round(np.clip((cX / w_img) * 10.0, 0.0, 10.0))
                     )
@@ -90,18 +107,18 @@ with col_left:
                     st.session_state.y_yellow = 0
 
                     st.success(
-                        f"🤖 Tọa độ nguyên Ghim Vàng (Drone): X = `{auto_x}`,"
-                        f" Z = `{auto_z}`"
+                        f"🤖 AI đọc Ghim Vàng (Drone): X = `{auto_x}`, Z ="
+                        f" `{auto_z}` (Số nguyên)"
                     )
                 else:
                     st.warning("⚠️ Không quét thấy ghim Vàng nổi bật trên tường.")
             else:
-                st.error("❌ Không tìm thấy mã ArUco trên mặt tường Oxz.")
+                st.error("❌ Không tìm thấy mã ArUco nào trên mặt tường Oxz.")
 
     with tab_san:
         st.markdown(
-            "**Mặt sàn ($Oxy$):** Quét mã **ID 0, 1, 2** & Tự động đọc **Ghim"
-            " Đỏ**."
+            "**Mặt sàn ($Oxy$):** Cần đủ mã **ID 0** (Gốc), **ID 1** ($Ox$)"
+            " và **ID 2** ($Oy$)."
         )
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
 
@@ -118,10 +135,27 @@ with col_left:
 
             if ids is not None:
                 flat_ids = ids.flatten()
+                detected_set = set(flat_ids)
+                target_floor = {0, 1, 2}
+
                 st.success(
-                    f"🎯 Đã phát hiện ArUco dưới sàn Oxy: `{list(flat_ids)}`"
+                    f"🎯 Đã phát hiện **{len(flat_ids)} mã** ArUco dưới sàn"
+                    f" Oxy: `{list(flat_ids)}`"
                 )
 
+                # KIỂM TRA CHECK ĐỦ BỘ MÃ ID
+                if target_floor.issubset(detected_set):
+                    st.info(
+                        "✅ Đã quét ĐỦ BỘ MỐC CHUẨN dưới mặt sàn (ID 0, ID 1,"
+                        " ID 2)!"
+                    )
+                else:
+                    st.warning(
+                        "⚠️ Chưa đủ mốc chuẩn dưới sàn (Cần quét rõ các mã ID"
+                        " 0, 1, 2)."
+                    )
+
+                # Thuật toán quét Ghim Đỏ
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
                 h_img, w_img = img.shape[:2]
 
@@ -134,7 +168,7 @@ with col_left:
                     cX = int(M_red["m10"] / M_red["m00"])
                     cY = int(M_red["m01"] / M_red["m00"])
 
-                    # LÀM TRÒN THÀNH SỐ NGUYÊN (INT)
+                    # Quy đổi & làm tròn thành số nguyên
                     auto_x = int(
                         round(np.clip((cX / w_img) * 10.0, 0.0, 10.0))
                     )
@@ -147,13 +181,13 @@ with col_left:
                     st.session_state.z_red = 0
 
                     st.success(
-                        f"🤖 Tọa độ nguyên Ghim Đỏ (Nạn nhân): X = `{auto_x}`,"
-                        f" Y = `{auto_y}`"
+                        f"🤖 AI đọc Ghim Đỏ (Nạn nhân): X = `{auto_x}`, Y ="
+                        f" `{auto_y}` (Số nguyên)"
                     )
                 else:
                     st.warning("⚠️ Không quét thấy ghim Đỏ nổi bật dưới sàn.")
             else:
-                st.error("❌ Không tìm thấy mã ArUco trên mặt sàn Oxy.")
+                st.error("❌ Không tìm thấy mã ArUco nào trên mặt sàn Oxy.")
 
     st.markdown("---")
     st.markdown("#### ⚙️ Thiết lập & Hiệu chỉnh tọa độ nguyên:")
@@ -321,6 +355,6 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Quy ước tọa độ giao điểm làm tròn số"
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Check ID ArUco & Quy ước tọa độ số"
     " nguyên."
 )
