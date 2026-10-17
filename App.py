@@ -5,22 +5,38 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz Thông Minh - Nhận Diện ArUco Oxz & Oxy",
-    layout="wide",
+    page_title="Hộp Oxyz Thông Minh - Camera Tỷ Lệ 1:1", layout="wide"
+)
+
+# --- CSS TÙY CHỈNH CAMERA THÀNH TỶ LỆ 1:1 ---
+st.markdown(
+    """
+    <style>
+    /* Ép khung camera input hiển thị dạng vuông (1:1) và căn giữa */
+    [data-testid="stCameraInput"] video, 
+    [data-testid="stCameraInput"] img, 
+    [data-testid="stCameraInput"] div[data-testid="stImage"] {
+        aspect-ratio: 1 / 1 !important;
+        object-fit: cover !important;
+        max-width: 450px !important;
+        margin: auto !important;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
 )
 
 st.markdown(
-    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: CHỤP TÁCH MẶT PHẲNG OXZ & OXY TÍNH TỌA"
-    " ĐỘ"
+    "### 🚁 HỆ THỐNG OXYZ THÔNG MINH: CAMERA 1:1 & NHẬN DIỆN ARUCO TỪNG MẶT"
 )
 
 col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
-    st.subheader("📷 1. Quét ArUco theo mặt phẳng (Khung hình 16:9)")
+    st.subheader("📷 1. Quét ArUco theo mặt phẳng (Tỷ lệ 1:1)")
     st.info(
-        "Tách thành 2 góc chụp vuông góc giúp camera loại bỏ độ méo phối cảnh"
-        " và nhận diện 100% các mã ArUco!"
+        "Giao diện camera đã được tối ưu về khung vuông 1:1, giúp bạn canh góc"
+        " chụp sa bàn chuẩn xác."
     )
 
     # Chia tab chụp ảnh chuẩn Oxz và Oxy
@@ -48,12 +64,25 @@ with col_left:
 
             if ids is not None:
                 flat_ids = ids.flatten()
+                detected_set = set(flat_ids)
+                target_wall = {0, 3}
+                found_wall = detected_set.intersection(target_wall)
+
                 st.success(
-                    f"🎯 Đã nhận diện mã trên tường Oxz: IDs"
-                    f" {list(flat_ids)}"
+                    f"🎯 Đã nhận diện **{len(flat_ids)} mã** trên tường Oxz."
+                    f" Các ID thấy được: `{list(flat_ids)}`"
                 )
+                if len(found_wall) == 2:
+                    st.info(
+                        "✅ Đã quét đủ các mốc chuẩn trên tường (ID 0 và ID 3)."
+                    )
+                else:
+                    st.warning(
+                        "⚠️ Thiếu một số mã mốc trên tường (Cần đủ ID 0 và ID"
+                        " 3)."
+                    )
             else:
-                st.warning("⚠️ Chưa phát hiện mã trên mặt tường Oxz.")
+                st.error("❌ Không tìm thấy mã ArUco nào trên mặt tường Oxz.")
 
     with tab_san:
         st.markdown(
@@ -75,11 +104,25 @@ with col_left:
 
             if ids is not None:
                 flat_ids = ids.flatten()
+                detected_set = set(flat_ids)
+                target_floor = {0, 1, 2}
+                found_floor = detected_set.intersection(target_floor)
+
                 st.success(
-                    f"🎯 Đã nhận diện mã dưới sàn Oxy: IDs {list(flat_ids)}"
+                    f"🎯 Đã nhận diện **{len(flat_ids)} mã** dưới sàn Oxy. Các"
+                    f" ID thấy được: `{list(flat_ids)}`"
                 )
+                if len(found_floor) >= 3:
+                    st.info(
+                        "✅ Đã quét đủ các mốc chuẩn dưới sàn (ID 0, ID 1, ID"
+                        " 2)."
+                    )
+                else:
+                    st.warning(
+                        "⚠️ Thiếu một số mã mốc dưới sàn (Cần đủ ID 0, 1, 2)."
+                    )
             else:
-                st.warning("⚠️ Chưa phát hiện mã trên mặt sàn Oxy.")
+                st.error("❌ Không tìm thấy mã ArUco nào trên mặt sàn Oxy.")
 
     st.markdown("---")
     st.markdown("#### ⚙️ Thiết lập tọa độ điểm trên sa bàn:")
@@ -237,6 +280,5 @@ with col_right:
 
 st.markdown("---")
 st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Tích hợp chụp tách mặt phẳng Oxz &"
-    " Oxy & Mô phỏng Vật lý 3D."
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Camera tỷ lệ 1:1 & Mô phỏng Vật lý 3D."
 )
