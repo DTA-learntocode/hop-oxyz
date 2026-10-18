@@ -5,19 +5,19 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz - Nhận diện ArUco ổn định hơn",
+    page_title="Hộp Oxyz - Ox=6, Oy=3, Oz=2",
     layout="wide",
 )
 
 # ====================== SESSION STATE ======================
 for key, val in [
-    ("x_red", 3), ("y_red", 2), ("z_red", 0),
-    ("x_yellow", 5), ("y_yellow", 0), ("z_yellow", 1)
+    ("x_red", 2), ("y_red", 1), ("z_red", 0),
+    ("x_yellow", 3), ("y_yellow", 0), ("z_yellow", 1)
 ]:
     if key not in st.session_state:
         st.session_state[key] = val
 
-st.markdown("### 🚁 HỆ THỐNG OXYZ – Nhận diện ArUco dễ hơn")
+st.markdown("### 🚁 HỆ THỐNG OXYZ – Ox = 6 ô | Oy = 3 ô | Oz = 2 ô")
 
 col_left, col_right = st.columns([1, 1.2])
 
@@ -37,8 +37,8 @@ def compute_affine_coords(pin_pt, pts_src, pts_dst):
     M = cv2.getAffineTransform(np.float32(pts_src), np.float32(pts_dst))
     pt = np.array([[pin_pt]], dtype=np.float32)
     transformed = cv2.transform(pt, M)[0][0]
-    x = float(np.clip(transformed[0], 0, 10))
-    y = float(np.clip(transformed[1], 0, 10))
+    x = float(np.clip(transformed[0], pts_dst[0][0], pts_dst[1][0]))
+    y = float(np.clip(transformed[1], pts_dst[0][1], pts_dst[2][1]))
     return x, y
 
 def detect_color_centroid(img, color="yellow"):
@@ -66,56 +66,42 @@ def detect_color_centroid(img, color="yellow"):
     return int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
 
 def preprocess_for_aruco(img):
-    """Tăng tương phản + làm nét để dễ nhận mã hơn"""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # CLAHE tăng tương phản cục bộ
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
-
-    # Làm nét nhẹ
     blur = cv2.GaussianBlur(enhanced, (0, 0), 1.0)
     sharpened = cv2.addWeighted(enhanced, 1.5, blur, -0.5, 0)
-
     return sharpened
 
 def create_detector():
     aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
     parameters = aruco.DetectorParameters()
 
-    # Nới lỏng mạnh để dễ nhận hơn
     parameters.adaptiveThreshWinSizeMin = 3
     parameters.adaptiveThreshWinSizeMax = 35
     parameters.adaptiveThreshWinSizeStep = 6
     parameters.adaptiveThreshConstant = 5
-
-    parameters.minMarkerPerimeterRate = 0.01          # cho phép mã nhỏ hơn
+    parameters.minMarkerPerimeterRate = 0.01
     parameters.maxMarkerPerimeterRate = 5.0
     parameters.polygonalApproxAccuracyRate = 0.07
     parameters.minCornerDistanceRate = 0.03
     parameters.minDistanceToBorder = 1
-
     parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
     parameters.cornerRefinementWinSize = 5
     parameters.cornerRefinementMaxIterations = 50
     parameters.cornerRefinementMinAccuracy = 0.05
-
-    parameters.detectInvertedMarker = True            # nhận cả mã đảo màu
+    parameters.detectInvertedMarker = True
 
     return aruco.ArucoDetector(aruco_dict, parameters)
 
 def detect_markers_robust(img):
-    """Thử nhận trên ảnh gốc + ảnh đã xử lý, lấy kết quả tốt nhất"""
     detector = create_detector()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     processed = preprocess_for_aruco(img)
 
-    # Thử 1: ảnh gốc
     corners1, ids1, _ = detector.detectMarkers(gray)
-    # Thử 2: ảnh đã tăng tương phản
     corners2, ids2, _ = detector.detectMarkers(processed)
 
-    # Chọn kết quả có nhiều mã hơn
     if ids1 is not None and (ids2 is None or len(ids1) >= len(ids2)):
         return corners1, ids1, gray
     else:
@@ -123,17 +109,20 @@ def detect_markers_robust(img):
 
 # ====================== GIAO DIỆN BÊN TRÁI ======================
 with col_left:
-    st.subheader("📷 Quét ArUco (phiên bản dễ nhận hơn)")
+    st.subheader("📷 Quét ArUco")
     st.info(
-        "**ID:** 0=(0,0,0) | 1=(10,0,0) | 2=(0,10,0) | 3=(0,0,10)\n\n"
-        "Đã thêm tiền xử lý ảnh + nới lỏng tham số detector."
+        "**Thang đo mới:**  \n"
+        "- **Ox** = 0 → 6 (6 ô)  \n"
+        "- **Oy** = 0 → 3 (3 ô)  \n"
+        "- **Oz** = 0 → 2 (2 ô)  \n\n"
+        "**ID:** 0=(0,0,0) | 1=(6,0,0) | 2=(0,3,0) | 3=(0,0,2)"
     )
 
     tab_tuong, tab_san = st.tabs(["🧱 Mặt Tường (Oxz)", "🟫 Mặt Sàn (Oxy)"])
 
-    # ---------- TƯỜNG Oxz ----------
+    # ---------- TƯỜNG Oxz (ID 0, 1, 3) ----------
     with tab_tuong:
-        st.markdown("**Cần ID 0, 1, 3**")
+        st.markdown("**Mặt tường Oxz:** Cần **ID 0, 1, 3**")
         img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
 
         if img_tuong is not None:
@@ -153,8 +142,9 @@ with col_left:
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
                     if all(k in centers for k in [0, 1, 3]):
+                        # Ox = 6, Oz = 2
                         pts_src = [centers[0], centers[1], centers[3]]
-                        pts_dst = [(0, 0), (10, 0), (0, 10)]
+                        pts_dst = [(0, 0), (6, 0), (0, 2)]
                         result = compute_affine_coords(pin, pts_src, pts_dst)
 
                         if result:
@@ -179,12 +169,12 @@ with col_left:
 
                 st.image(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB), caption="Ảnh annotation", use_container_width=True)
             else:
-                st.error("❌ Vẫn không tìm thấy mã ArUco.")
+                st.error("❌ Không tìm thấy mã ArUco.")
                 st.image(debug_img, caption="Ảnh đã xử lý (debug)", use_container_width=True, clamp=True)
 
-    # ---------- SÀN Oxy ----------
+    # ---------- SÀN Oxy (ID 0, 1, 2) ----------
     with tab_san:
-        st.markdown("**Cần ID 0, 1, 2**")
+        st.markdown("**Mặt sàn Oxy:** Cần **ID 0, 1, 2**")
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
 
         if img_san is not None:
@@ -204,8 +194,9 @@ with col_left:
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
                     if all(k in centers for k in [0, 1, 2]):
+                        # Ox = 6, Oy = 3
                         pts_src = [centers[0], centers[1], centers[2]]
-                        pts_dst = [(0, 0), (10, 0), (0, 10)]
+                        pts_dst = [(0, 0), (6, 0), (0, 3)]
                         result = compute_affine_coords(pin, pts_src, pts_dst)
 
                         if result:
@@ -230,7 +221,7 @@ with col_left:
 
                 st.image(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB), caption="Ảnh annotation", use_container_width=True)
             else:
-                st.error("❌ Vẫn không tìm thấy mã ArUco.")
+                st.error("❌ Không tìm thấy mã ArUco.")
                 st.image(debug_img, caption="Ảnh đã xử lý (debug)", use_container_width=True, clamp=True)
 
     # ---------- HIỆU CHỈNH + TÍNH TOÁN ----------
@@ -239,22 +230,22 @@ with col_left:
 
     st.markdown("🔴 **Điểm Đỏ (Nạn nhân)**")
     c1, c2, c3 = st.columns(3)
-    x_red = c1.number_input("X", value=int(st.session_state.x_red), step=1, key="rx")
-    y_red = c2.number_input("Y", value=int(st.session_state.y_red), step=1, key="ry")
-    z_red = c3.number_input("Z", value=int(st.session_state.z_red), step=1, key="rz")
+    x_red = c1.number_input("X (0-6)", value=int(st.session_state.x_red), min_value=0, max_value=6, step=1, key="rx")
+    y_red = c2.number_input("Y (0-3)", value=int(st.session_state.y_red), min_value=0, max_value=3, step=1, key="ry")
+    z_red = c3.number_input("Z (0-2)", value=int(st.session_state.z_red), min_value=0, max_value=2, step=1, key="rz")
 
     st.markdown("🟡 **Điểm Vàng (Drone)**")
     c1, c2, c3 = st.columns(3)
-    x_yellow = c1.number_input("X", value=int(st.session_state.x_yellow), step=1, key="yx")
-    y_yellow = c2.number_input("Y", value=int(st.session_state.y_yellow), step=1, key="yy")
-    z_yellow = c3.number_input("Z", value=int(st.session_state.z_yellow), step=1, key="yz")
+    x_yellow = c1.number_input("X (0-6)", value=int(st.session_state.x_yellow), min_value=0, max_value=6, step=1, key="yx")
+    y_yellow = c2.number_input("Y (0-3)", value=int(st.session_state.y_yellow), min_value=0, max_value=3, step=1, key="yy")
+    z_yellow = c3.number_input("Z (0-2)", value=int(st.session_state.z_yellow), min_value=0, max_value=2, step=1, key="yz")
 
     P_red = np.array([x_red, y_red, z_red], dtype=float)
     P_yellow = np.array([x_yellow, y_yellow, z_yellow], dtype=float)
 
     distance = np.linalg.norm(P_red - P_yellow)
     P_drop = np.array([P_red[0], P_red[1], P_yellow[2]])
-    h_meters = P_yellow[2] * 1000.0
+    h_meters = P_yellow[2] * 1000.0   # vẫn giữ quy ước 1 đơn vị = 1 km
     t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
     d_ngang_km = (5.0 * t_fall) / 1000.0
 
@@ -270,14 +261,15 @@ with col_left:
     st.subheader("📊 Kết quả")
     st.write(f"🔴 Nạn nhân: `{list(P_red)}`")
     st.write(f"🟡 Drone: `{list(P_yellow)}`")
-    st.warning(f"📏 Khoảng cách: **{distance:.2f} km**")
+    st.warning(f"📏 Khoảng cách: **{distance:.2f} đơn vị**")
     st.success(f"📦 Thả thẳng đứng: `{list(P_drop)}`")
     st.info(f"✈️ Thả khi bay: `({P_release[0]:.2f}, {P_release[1]:.2f}, {P_release[2]})`")
 
-# ====================== CỘT PHẢI ======================
+# ====================== CỘT PHẢI: 3D ======================
 with col_right:
     st.subheader("🌐 Mô hình 3D Oxyz")
     fig = go.Figure()
+
     fig.add_trace(go.Scatter3d(
         x=[P_red[0]], y=[P_red[1]], z=[P_red[2]],
         mode="markers+text", marker=dict(size=11, color="red", symbol="diamond"),
@@ -297,15 +289,16 @@ with col_right:
         x=[P_yellow[0], P_red[0]], y=[P_yellow[1], P_red[1]], z=[P_yellow[2], P_red[2]],
         mode="lines", line=dict(color="orange", width=4, dash="dash"), name="Khoảng cách"
     ))
+
     fig.update_layout(
         scene=dict(
-            xaxis=dict(range=[0, 11], title="Ox (km)"),
-            yaxis=dict(range=[0, 11], title="Oy (km)"),
-            zaxis=dict(range=[0, 11], title="Oz (km)"),
-            camera=dict(eye=dict(x=1.6, y=-1.6, z=1.2)),
+            xaxis=dict(range=[0, 7], title="Ox (0→6)", zeroline=True),
+            yaxis=dict(range=[0, 4], title="Oy (0→3)", zeroline=True),
+            zaxis=dict(range=[0, 3], title="Oz (0→2)", zeroline=True),
+            camera=dict(eye=dict(x=1.8, y=-1.8, z=1.3)),
         ),
         margin=dict(l=0, r=0, b=0, t=30),
     )
     st.plotly_chart(fig, use_container_width=True)
 
-st.caption("💡 Đã tăng khả năng nhận ArUco: tiền xử lý ảnh + nới lỏng tham số detector.")
+st.caption("💡 Thang đo: Ox = 6 ô | Oy = 3 ô | Oz = 2 ô  •  ID 0=(0,0,0) | 1=(6,0,0) | 2=(0,3,0) | 3=(0,0,2)")
