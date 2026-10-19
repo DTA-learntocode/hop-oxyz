@@ -1,32 +1,18 @@
-from pathlib import Path
 import cv2
 import cv2.aruco as aruco
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-# Ép TensorFlow chạy chế độ Keras cũ để đọc model .h5 từ Teachable Machine không bị lỗi input
-import os
-
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
-
 st.set_page_config(
-    page_title="Hộp Oxyz - Teachable Machine Mobile",
+    page_title="Hộp Oxyz - Ox=Oy=Oz=10",
     layout="wide",
 )
 
-BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "keras_model.h5"
-LABELS_PATH = BASE_DIR / "labels.txt"
-
 # ====================== SESSION STATE ======================
 defaults = {
-    "x_red": 3,
-    "y_red": 2,
-    "z_red": 3,  # Nhà mặc định Z = 3
-    "x_yellow": 5,
-    "y_yellow": 0,
-    "z_yellow": 1,
+    "x_red": 3, "y_red": 2, "z_red": 3,  # nhà — Z mặc định = 3
+    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,  # trực thăng
     "floor_ok": False,
     "wall_ok": False,
 }
@@ -35,88 +21,12 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 MAX_X, MAX_Y, MAX_Z = 10, 10, 10
-CLASS_NHA = 0
-CLASS_TRUC_THANG = 1
-MIN_SCORE = 0.60
 
-st.markdown("### 🚁 HỆ THỐNG OXYZ – AI & ARUCO (TỐI ƯU MOBILE)")
+st.markdown("### hệ thống oxyz – ox = oy = oz = 10")
 
 col_left, col_right = st.columns([1, 1.2])
 
-
-# ====================== MODEL TEACHABLE MACHINE ======================
-@st.cache_resource(show_spinner="Đang tải model Teachable Machine...")
-def load_tm_model():
-    import tensorflow as tf
-
-    model = tf.keras.models.load_model(str(MODEL_PATH), compile=False)
-    labels = []
-    if LABELS_PATH.exists():
-        with open(LABELS_PATH, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                parts = line.split(maxsplit=1)
-                labels.append(
-                    parts[1].strip() if len(parts) > 1 else parts[0]
-                )
-    return model, labels
-
-
-def locate_class(img_bgr, model, class_index, min_score=MIN_SCORE):
-    """Quét ảnh tối ưu tốc độ cho điện thoại (Resize ảnh trước khi cắt ô)."""
-    h, w = img_bgr.shape[:2]
-
-    # Giới hạn kích thước ảnh tối đa 640px để chống tràn RAM trên điện thoại/cloud
-    max_dim = 640
-    if max(h, w) > max_dim:
-        scale_input = max_dim / max(h, w)
-        img_bgr = cv2.resize(
-            img_bgr, (int(w * scale_input), int(h * scale_input))
-        )
-        h, w = img_bgr.shape[:2]
-    else:
-        scale_input = 1.0
-
-    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
-    crops, metas = [], []
-    for win in (60, 100, 140):
-        if win >= min(h, w):
-            continue
-        stride = max(win // 2, 25)
-        for y in range(0, h - win + 1, stride):
-            for x in range(0, w - win + 1, stride):
-                patch = cv2.resize(
-                    rgb[y : y + win, x : x + win], (224, 224)
-                )
-                crops.append(patch)
-                orig_x = (x + win / 2) / scale_input
-                orig_y = (y + win / 2) / scale_input
-                metas.append((orig_x, orig_y))
-
-    if not crops:
-        crops.append(cv2.resize(rgb, (224, 224)))
-        metas.append((w / (2 * scale_input), h / (2 * scale_input)))
-
-    best_score, best_xy = -1.0, None
-    for start in range(0, len(crops), 32):
-        batch = np.stack(crops[start : start + 32]).astype(np.float32)
-        batch = (batch / 127.5) - 1.0  # Chuẩn hóa của Teachable Machine
-        preds = model.predict(batch, verbose=0)
-        for i, p in enumerate(preds):
-            score = float(p[class_index])
-            if score > best_score:
-                best_score = score
-                best_xy = metas[start + i]
-
-    if best_xy is None or best_score < min_score:
-        return None
-    return int(best_xy[0]), int(best_xy[1]), best_score
-
-
-# ====================== ARUCO + TỌA ĐỘ ======================
+# ====================== HÀM TIỆN ÍCH ======================
 def get_marker_centers(corners, ids):
     centers = {}
     if ids is None:
@@ -125,7 +35,6 @@ def get_marker_centers(corners, ids):
         c = corners[i][0]
         centers[int(mid)] = (int(np.mean(c[:, 0])), int(np.mean(c[:, 1])))
     return centers
-
 
 def compute_affine_coords(pin_pt, pts_src, pts_dst, max_x, max_y):
     if len(pts_src) < 3:
@@ -137,258 +46,221 @@ def compute_affine_coords(pin_pt, pts_src, pts_dst, max_x, max_y):
     y = float(np.clip(transformed[1], 0, max_y))
     return x, y
 
+def detect_color_centroid(img, color="yellow"):
+    """nhà = vàng | trực thăng = xanh dương (không dùng đỏ)."""
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    if color == "yellow":
+        mask = cv2.inRange(hsv, np.array([15, 70, 70]), np.array([40, 255, 255]))
+    else:  # blue
+        mask = cv2.inRange(hsv, np.array([90, 60, 40]), np.array([130, 255, 255]))
 
-def detect_markers_robust(img):
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    largest = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(largest) < 60:
+        return None
+    M = cv2.moments(largest)
+    if M["m00"] == 0:
+        return None
+    return int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
+
+def preprocess_for_aruco(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    blur = cv2.GaussianBlur(enhanced, (0, 0), 1.0)
+    return cv2.addWeighted(enhanced, 1.5, blur, -0.5, 0)
+
+def create_detector():
     aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
     parameters = aruco.DetectorParameters()
-    detector = aruco.ArucoDetector(aruco_dict, parameters)
+    parameters.adaptiveThreshWinSizeMin = 3
+    parameters.adaptiveThreshWinSizeMax = 35
+    parameters.adaptiveThreshWinSizeStep = 6
+    parameters.adaptiveThreshConstant = 5
+    parameters.minMarkerPerimeterRate = 0.01
+    parameters.maxMarkerPerimeterRate = 5.0
+    parameters.polygonalApproxAccuracyRate = 0.07
+    parameters.minCornerDistanceRate = 0.03
+    parameters.minDistanceToBorder = 1
+    parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+    parameters.cornerRefinementWinSize = 5
+    parameters.cornerRefinementMaxIterations = 50
+    parameters.cornerRefinementMinAccuracy = 0.05
+    parameters.detectInvertedMarker = True
+    return aruco.ArucoDetector(aruco_dict, parameters)
+
+def detect_markers_robust(img):
+    detector = create_detector()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    corners, ids, _ = detector.detectMarkers(gray)
-    return corners, ids, gray
+    processed = preprocess_for_aruco(img)
+    corners1, ids1, _ = detector.detectMarkers(gray)
+    corners2, ids2, _ = detector.detectMarkers(processed)
+    if ids1 is not None and (ids2 is None or len(ids1) >= len(ids2)):
+        return corners1, ids1, gray
+    return corners2, ids2, processed
 
-
-# ====================== GIAO DIỆN ======================
+# ====================== GIAO DIỆN BÊN TRÁI ======================
 with col_left:
-    st.subheader("📷 Quét ArUco & AI Teachable Machine")
+    st.subheader("quét aruco & cập nhật tọa độ")
     st.info(
         f"**Thang đo:** Ox = 0→{MAX_X} | Oy = 0→{MAX_Y} | Oz = 0→{MAX_Z}\n\n"
-        "**Mốc ID tường (Oxz):** 0, 1, 3 | **Mốc ID sàn (Oxy):** 0, 1, 2\n\n"
-        "Nhận diện Nhà & Trực thăng bằng file **.h5**."
+        "**ID:** 0=(0,0,0) | 1=(10,0,0) | 2=(0,10,0) | 3=(0,0,10)\n\n"
+        "**nhà** = màu **vàng** (mặt sàn) · **trực thăng** = màu **xanh dương** (mặt tường)\n\n"
+        "nhà mặc định **Z = 3**"
     )
 
-    if not MODEL_PATH.exists() or not LABELS_PATH.exists():
-        st.error(
-            "Thiếu file `keras_model.h5` hoặc `labels.txt` trong cùng thư mục với"
-            " app.py."
-        )
-        st.stop()
+    tab_tuong, tab_san = st.tabs(["mặt tường (Oxz)", "mặt sàn (Oxy)"])
 
-    try:
-        tm_model, tm_labels = load_tm_model()
-    except Exception as exc:
-        st.error(f"Không tải được model: {exc}")
-        st.stop()
-
-    tab_tuong, tab_san = st.tabs(["🧱 Mặt tường (Oxz)", "🟫 Mặt sàn (Oxy)"])
-
-    # ---------- TƯỜNG: Trực thăng ----------
+    # ---------- TƯỜNG Oxz (trực thăng - xanh dương) ----------
     with tab_tuong:
-        st.markdown("**Cần ID 0, 1, 3** — Nhận diện **Trực thăng**")
+        st.markdown("**Cần ID 0, 1, 3** — tìm **trực thăng** (xanh dương)")
         img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
 
         if img_tuong is not None:
-            img = cv2.imdecode(
-                np.frombuffer(img_tuong.getvalue(), np.uint8), cv2.IMREAD_COLOR
-            )
+            img = cv2.imdecode(np.frombuffer(img_tuong.getvalue(), np.uint8), cv2.IMREAD_COLOR)
             corners, ids, debug_img = detect_markers_robust(img)
             img_draw = img.copy()
 
             if ids is not None:
-                flat_ids = ids.flatten()
-                detected_set = set(flat_ids)
-                target_wall = {0, 1, 3}
-
                 aruco.drawDetectedMarkers(img_draw, corners, ids)
                 centers = get_marker_centers(corners, ids)
-                st.success(f"Phát hiện mã ArUco: `{list(flat_ids)}`")
+                st.success(f"Phát hiện: `{list(ids.flatten())}`")
 
-                if target_wall.issubset(detected_set):
-                    st.info(
-                        "✅ Đã quét ĐỦ BỘ MỐC trên tường (ID 0, ID 1, ID 3)!"
-                    )
-                else:
-                    st.warning("⚠️ Chưa đủ mốc chuẩn trên tường (Cần ID 0, 1, 3).")
-
-                with st.spinner("AI đang quét trực thăng..."):
-                    found = locate_class(img, tm_model, CLASS_TRUC_THANG)
-
-                if found is not None:
-                    cx, cy, score = found
-                    cv2.circle(img_draw, (cx, cy), 16, (0, 255, 255), 3)
+                pin = detect_color_centroid(img, "blue")
+                if pin is not None:
+                    cv2.circle(img_draw, pin, 12, (255, 180, 0), 3)
                     cv2.putText(
-                        img_draw,
-                        f"Truc Thang {score:.0%}",
-                        (cx + 20, cy),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 255, 255),
-                        2,
+                        img_draw, "truc thang", (pin[0] + 15, pin[1]),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 180, 0), 2,
                     )
 
-                    if target_wall.issubset(detected_set):
+                    if all(k in centers for k in [0, 1, 3]):
                         pts_src = [centers[0], centers[1], centers[3]]
                         pts_dst = [(0, 0), (MAX_X, 0), (0, MAX_Z)]
-                        result = compute_affine_coords(
-                            (cx, cy), pts_src, pts_dst, MAX_X, MAX_Z
-                        )
+                        result = compute_affine_coords(pin, pts_src, pts_dst, MAX_X, MAX_Z)
+
                         if result:
                             x_cont, z_cont = result
                             auto_x = int(round(x_cont))
                             auto_z = int(round(z_cont))
+
                             st.session_state.x_yellow = auto_x
                             st.session_state.z_yellow = auto_z
                             st.session_state.y_yellow = 0
+                            st.session_state.yx = auto_x
+                            st.session_state.yz = auto_z
+                            st.session_state.yy = 0
                             st.session_state.wall_ok = True
+
                             st.success(
-                                f"✅ **Đã nhận diện Trực thăng** ({score:.0%})\n\n"
-                                f"Tọa độ số nguyên: **X = {auto_x}, Z ="
-                                f" {auto_z}**"
+                                f"**Đã cập nhật trực thăng**\n"
+                                f"Liên tục: X ≈ {x_cont:.2f}, Z ≈ {z_cont:.2f}\n"
+                                f"→ **Số nguyên: X = {auto_x}, Z = {auto_z}**"
                             )
                         else:
-                            st.warning("Không tính được tọa độ Affine.")
+                            st.warning("Không tính được Affine.")
+                    else:
+                        st.warning("Chưa đủ ID 0, 1, 3.")
                 else:
-                    st.warning(
-                        f"Không tìm thấy Trực thăng (Độ tin cậy <"
-                        f" {MIN_SCORE:.0%})."
-                    )
+                    st.warning("Không thấy trực thăng (màu xanh dương).")
 
-                st.image(
-                    cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB),
-                    use_container_width=True,
-                )
+                st.image(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB), use_container_width=True)
             else:
-                st.error("Không tìm thấy mã ArUco nào trên tường.")
+                st.error("Không tìm thấy mã ArUco.")
+                st.image(debug_img, caption="ảnh debug", use_container_width=True, clamp=True)
 
-    # ---------- SÀN: Nhà ----------
+    # ---------- SÀN Oxy (nhà - vàng) ----------
     with tab_san:
-        st.markdown("**Cần ID 0, 1, 2** — Nhận diện **Nhà**")
+        st.markdown("**Cần ID 0, 1, 2** — tìm **nhà** (vàng)")
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
 
         if img_san is not None:
-            img = cv2.imdecode(
-                np.frombuffer(img_san.getvalue(), np.uint8), cv2.IMREAD_COLOR
-            )
+            img = cv2.imdecode(np.frombuffer(img_san.getvalue(), np.uint8), cv2.IMREAD_COLOR)
             corners, ids, debug_img = detect_markers_robust(img)
             img_draw = img.copy()
 
             if ids is not None:
-                flat_ids = ids.flatten()
-                detected_set = set(flat_ids)
-                target_floor = {0, 1, 2}
-
                 aruco.drawDetectedMarkers(img_draw, corners, ids)
                 centers = get_marker_centers(corners, ids)
-                st.success(f"Phát hiện mã ArUco: `{list(flat_ids)}`")
+                st.success(f"Phát hiện: `{list(ids.flatten())}`")
 
-                if target_floor.issubset(detected_set):
-                    st.info("✅ Đã quét ĐỦ BỘ MỐC dưới sàn (ID 0, ID 1, ID 2)!")
-                else:
-                    st.warning("⚠️ Chưa đủ mốc chuẩn dưới sàn (Cần ID 0, 1, 2).")
-
-                with st.spinner("AI đang quét Nhà..."):
-                    found = locate_class(img, tm_model, CLASS_NHA)
-
-                if found is not None:
-                    cx, cy, score = found
-                    cv2.circle(img_draw, (cx, cy), 16, (0, 0, 255), 3)
+                pin = detect_color_centroid(img, "yellow")
+                if pin is not None:
+                    cv2.circle(img_draw, pin, 12, (0, 255, 255), 3)
                     cv2.putText(
-                        img_draw,
-                        f"Nha {score:.0%}",
-                        (cx + 20, cy),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 0, 255),
-                        2,
+                        img_draw, "nha", (pin[0] + 15, pin[1]),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2,
                     )
 
-                    if target_floor.issubset(detected_set):
+                    if all(k in centers for k in [0, 1, 2]):
                         pts_src = [centers[0], centers[1], centers[2]]
                         pts_dst = [(0, 0), (MAX_X, 0), (0, MAX_Y)]
-                        result = compute_affine_coords(
-                            (cx, cy), pts_src, pts_dst, MAX_X, MAX_Y
-                        )
+                        result = compute_affine_coords(pin, pts_src, pts_dst, MAX_X, MAX_Y)
+
                         if result:
                             x_cont, y_cont = result
                             auto_x = int(round(x_cont))
                             auto_y = int(round(y_cont))
+
                             st.session_state.x_red = auto_x
                             st.session_state.y_red = auto_y
+                            # Z nhà giữ = 3
+                            st.session_state.rx = auto_x
+                            st.session_state.ry = auto_y
                             st.session_state.floor_ok = True
+
                             st.success(
-                                f"✅ **Đã nhận diện Nhà** ({score:.0%})\n\n"
-                                f"Tọa độ số nguyên: **X = {auto_x}, Y ="
-                                f" {auto_y}** (Z giữ = 3)"
+                                f"**Đã cập nhật nhà**\n"
+                                f"Liên tục: X ≈ {x_cont:.2f}, Y ≈ {y_cont:.2f}\n"
+                                f"→ **Số nguyên: X = {auto_x}, Y = {auto_y}** (Z giữ = 3)"
                             )
                         else:
-                            st.warning("Không tính được tọa độ Affine.")
+                            st.warning("Không tính được Affine.")
+                    else:
+                        st.warning("Chưa đủ ID 0, 1, 2.")
                 else:
-                    st.warning(
-                        f"Không tìm thấy Nhà (Độ tin cậy < {MIN_SCORE:.0%})."
-                    )
+                    st.warning("Không thấy nhà (màu vàng).")
 
-                st.image(
-                    cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB),
-                    use_container_width=True,
-                )
+                st.image(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB), use_container_width=True)
             else:
-                st.error("Không tìm thấy mã ArUco nào dưới sàn.")
+                st.error("Không tìm thấy mã ArUco.")
+                st.image(debug_img, caption="ảnh debug", use_container_width=True, clamp=True)
 
-    # ---------- HIỆU CHỈNH THỦ CÔNG (SỐ NGUYÊN) ----------
+    # ---------- HIỆU CHỈNH ----------
     st.markdown("---")
-    st.markdown("#### ⚙️ Thiết lập & Hiệu chỉnh tọa độ (Số nguyên)")
+    st.markdown("#### tọa độ hiện tại")
 
+    if st.session_state.floor_ok and st.session_state.wall_ok:
+        st.success("Đã quét đủ cả 2 mặt → tọa độ sẵn sàng tính toán")
+    elif st.session_state.floor_ok:
+        st.info("Đã có tọa độ nhà (sàn)")
+    elif st.session_state.wall_ok:
+        st.info("Đã có tọa độ trực thăng (tường)")
+
+    st.markdown("**nhà** (vàng) — Z mặc định = 3")
     c1, c2, c3 = st.columns(3)
-    x_red = c1.number_input(
-        "X Nhà",
-        min_value=0,
-        max_value=MAX_X,
-        value=int(st.session_state.x_red),
-        step=1,
-        key="rx",
-    )
-    y_red = c2.number_input(
-        "Y Nhà",
-        min_value=0,
-        max_value=MAX_Y,
-        value=int(st.session_state.y_red),
-        step=1,
-        key="ry",
-    )
-    z_red = c3.number_input(
-        "Z Nhà",
-        min_value=0,
-        max_value=MAX_Z,
-        value=int(st.session_state.z_red),
-        step=1,
-        key="rz",
-    )
+    x_red = c1.number_input("X (0-10)", min_value=0, max_value=MAX_X, step=1, key="rx")
+    y_red = c2.number_input("Y (0-10)", min_value=0, max_value=MAX_Y, step=1, key="ry")
+    z_red = c3.number_input("Z (0-10)", min_value=0, max_value=MAX_Z, step=1, key="rz")
 
+    st.markdown("**trực thăng** (xanh dương)")
     c1, c2, c3 = st.columns(3)
-    x_yellow = c1.number_input(
-        "X Trực thăng",
-        min_value=0,
-        max_value=MAX_X,
-        value=int(st.session_state.x_yellow),
-        step=1,
-        key="yx",
-    )
-    y_yellow = c2.number_input(
-        "Y Trực thăng",
-        min_value=0,
-        max_value=MAX_Y,
-        value=int(st.session_state.y_yellow),
-        step=1,
-        key="yy",
-    )
-    z_yellow = c3.number_input(
-        "Z Trực thăng",
-        min_value=0,
-        max_value=MAX_Z,
-        value=int(st.session_state.z_yellow),
-        step=1,
-        key="yz",
-    )
+    x_yellow = c1.number_input("X (0-10)", min_value=0, max_value=MAX_X, step=1, key="yx")
+    y_yellow = c2.number_input("Y (0-10)", min_value=0, max_value=MAX_Y, step=1, key="yy")
+    z_yellow = c3.number_input("Z (0-10)", min_value=0, max_value=MAX_Z, step=1, key="yz")
 
-    st.session_state.x_red, st.session_state.y_red, st.session_state.z_red = (
-        x_red,
-        y_red,
-        z_red,
-    )
-    (
-        st.session_state.x_yellow,
-        st.session_state.y_yellow,
-        st.session_state.z_yellow,
-    ) = (x_yellow, y_yellow, z_yellow)
+    st.session_state.x_red = x_red
+    st.session_state.y_red = y_red
+    st.session_state.z_red = z_red
+    st.session_state.x_yellow = x_yellow
+    st.session_state.y_yellow = y_yellow
+    st.session_state.z_yellow = z_yellow
 
     P_red = np.array([x_red, y_red, z_red], dtype=float)
     P_yellow = np.array([x_yellow, y_yellow, z_yellow], dtype=float)
@@ -408,62 +280,36 @@ with col_left:
     P_release = np.array([release_xy[0], release_xy[1], P_yellow[2]])
 
     st.markdown("---")
-    st.subheader("📊 Kết quả Phân tích Vật lý")
-    st.write(f"🏠 **Nhà:** `{list(P_red.astype(int))}`")
-    st.write(f"🚁 **Trực thăng:** `{list(P_yellow.astype(int))}`")
-    st.warning(f"📏 Khoảng cách không gian: **{distance:.2f}** đơn vị")
-    st.success(f"📦 Thả thẳng đứng: `{list(P_drop.astype(int))}`")
-    st.info(
-        f"✈️ Thả khi bay: `({P_release[0]:.2f}, {P_release[1]:.2f},"
-        f" {P_release[2]})`"
-    )
+    st.subheader("kết quả tính toán")
+    st.write(f"**nhà:** `{list(P_red)}`")
+    st.write(f"**trực thăng:** `{list(P_yellow)}`")
+    st.warning(f"Khoảng cách: **{distance:.2f} đơn vị**")
+    st.success(f"Thả thẳng đứng: `{list(P_drop)}`")
+    st.info(f"Thả khi bay: `({P_release[0]:.2f}, {P_release[1]:.2f}, {P_release[2]})`")
 
+# ====================== CỘT PHẢI ======================
 with col_right:
-    st.subheader("🌐 Mô hình 3D Oxyz")
+    st.subheader("mô hình 3D")
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter3d(
-            x=[P_red[0]],
-            y=[P_red[1]],
-            z=[P_red[2]],
-            mode="markers+text",
-            marker=dict(size=12, color="red", symbol="diamond"),
-            text=["Nhà"],
-            name="Nhà",
-        )
-    )
-    fig.add_trace(
-        go.Scatter3d(
-            x=[P_yellow[0]],
-            y=[P_yellow[1]],
-            z=[P_yellow[2]],
-            mode="markers+text",
-            marker=dict(size=12, color="gold", symbol="square"),
-            text=["Trực thăng"],
-            name="Trực thăng",
-        )
-    )
-    fig.add_trace(
-        go.Scatter3d(
-            x=[P_release[0]],
-            y=[P_release[1]],
-            z=[P_release[2]],
-            mode="markers+text",
-            marker=dict(size=10, color="purple", symbol="cross"),
-            text=["Điểm thả"],
-            name="Điểm thả",
-        )
-    )
-    fig.add_trace(
-        go.Scatter3d(
-            x=[P_yellow[0], P_red[0]],
-            y=[P_yellow[1], P_red[1]],
-            z=[P_yellow[2], P_red[2]],
-            mode="lines",
-            line=dict(color="orange", width=5, dash="dash"),
-            name="Khoảng cách",
-        )
-    )
+    fig.add_trace(go.Scatter3d(
+        x=[P_red[0]], y=[P_red[1]], z=[P_red[2]],
+        mode="markers+text", marker=dict(size=12, color="gold", symbol="diamond"),
+        text=["nhà"], name="nhà",
+    ))
+    fig.add_trace(go.Scatter3d(
+        x=[P_yellow[0]], y=[P_yellow[1]], z=[P_yellow[2]],
+        mode="markers+text", marker=dict(size=12, color="royalblue", symbol="square"),
+        text=["trực thăng"], name="trực thăng",
+    ))
+    fig.add_trace(go.Scatter3d(
+        x=[P_release[0]], y=[P_release[1]], z=[P_release[2]],
+        mode="markers+text", marker=dict(size=10, color="purple", symbol="cross"),
+        text=["điểm thả"], name="điểm thả",
+    ))
+    fig.add_trace(go.Scatter3d(
+        x=[P_yellow[0], P_red[0]], y=[P_yellow[1], P_red[1]], z=[P_yellow[2], P_red[2]],
+        mode="lines", line=dict(color="orange", width=5, dash="dash"), name="khoảng cách",
+    ))
     fig.update_layout(
         scene=dict(
             xaxis=dict(range=[0, MAX_X + 1], title=f"Ox (0→{MAX_X})"),
@@ -475,7 +321,4 @@ with col_right:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-st.caption(
-    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Sử dụng mô hình Teachable Machine"
-    " (.h5) & ArUco."
-)
+st.caption("Ox = Oy = Oz = 10 · nhà (vàng) Z=3 · trực thăng (xanh dương) · không dùng model AI")
