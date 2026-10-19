@@ -5,14 +5,14 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz - Ox=6 | Oy=3 | Oz=2",
+    page_title="Hộp Oxyz - Ox=Oy=Oz=10",
     layout="wide",
 )
 
 # ====================== SESSION STATE ======================
 defaults = {
-    "x_red": 2, "y_red": 1, "z_red": 0,
-    "x_yellow": 3, "y_yellow": 0, "z_yellow": 1,
+    "x_red": 3, "y_red": 2, "z_red": 3,          # <-- Z Nhà mặc định = 3
+    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,
     "floor_ok": False,
     "wall_ok": False,
 }
@@ -20,9 +20,9 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-MAX_X, MAX_Y, MAX_Z = 6, 3, 2
+MAX_X, MAX_Y, MAX_Z = 10, 10, 10
 
-st.markdown("### 🚁 HỆ THỐNG OXYZ – Ox = 6 ô | Oy = 3 ô | Oz = 2 ô")
+st.markdown("### 🚁 HỆ THỐNG OXYZ – Ox = Oy = Oz = 10")
 
 col_left, col_right = st.columns([1, 1.2])
 
@@ -111,7 +111,8 @@ with col_left:
     st.subheader("📷 Quét ArUco & Tự động cập nhật tọa độ")
     st.info(
         f"**Thang đo:** Ox = 0→{MAX_X} | Oy = 0→{MAX_Y} | Oz = 0→{MAX_Z}\n\n"
-        "**ID:** 0=(0,0,0) | 1=(6,0,0) | 2=(0,3,0) | 3=(0,0,2)"
+        "**ID:** 0=(0,0,0) | 1=(10,0,0) | 2=(0,10,0) | 3=(0,0,10)\n\n"
+        "🏠 Nhà mặc định **Z = 3**"
     )
 
     tab_tuong, tab_san = st.tabs(["🧱 Mặt Tường (Oxz)", "🟫 Mặt Sàn (Oxy)"])
@@ -203,18 +204,19 @@ with col_left:
                             auto_x = int(round(x_cont))
                             auto_y = int(round(y_cont))
 
+                            # Chỉ cập nhật X và Y, GIỮ NGUYÊN Z = 3
                             st.session_state.x_red = auto_x
                             st.session_state.y_red = auto_y
-                            st.session_state.z_red = 0
+                            # st.session_state.z_red giữ nguyên (mặc định 3)
                             st.session_state.rx = auto_x
                             st.session_state.ry = auto_y
-                            st.session_state.rz = 0
+                            # không đụng key "rz"
                             st.session_state.floor_ok = True
 
                             st.success(
                                 f"🤖 **Đã cập nhật Nhà**\n"
                                 f"Liên tục: X ≈ {x_cont:.2f}, Y ≈ {y_cont:.2f}\n"
-                                f"→ **Số nguyên: X = {auto_x}, Y = {auto_y}**"
+                                f"→ **Số nguyên: X = {auto_x}, Y = {auto_y}** (Z giữ = 3)"
                             )
                         else:
                             st.warning("Không tính được Affine.")
@@ -239,17 +241,17 @@ with col_left:
     elif st.session_state.wall_ok:
         st.info("🚁 Đã có tọa độ Trực thăng (tường)")
 
-    st.markdown("🏠 **Nhà (màu đỏ)**")
+    st.markdown("🏠 **Nhà (màu đỏ)** — Z mặc định = 3")
     c1, c2, c3 = st.columns(3)
-    x_red = c1.number_input("X (0-6)", min_value=0, max_value=MAX_X, step=1, key="rx")
-    y_red = c2.number_input("Y (0-3)", min_value=0, max_value=MAX_Y, step=1, key="ry")
-    z_red = c3.number_input("Z (0-2)", min_value=0, max_value=MAX_Z, step=1, key="rz")
+    x_red = c1.number_input("X (0-10)", min_value=0, max_value=MAX_X, step=1, key="rx")
+    y_red = c2.number_input("Y (0-10)", min_value=0, max_value=MAX_Y, step=1, key="ry")
+    z_red = c3.number_input("Z (0-10)", min_value=0, max_value=MAX_Z, step=1, key="rz")
 
     st.markdown("🚁 **Trực thăng (màu vàng)**")
     c1, c2, c3 = st.columns(3)
-    x_yellow = c1.number_input("X (0-6)", min_value=0, max_value=MAX_X, step=1, key="yx")
-    y_yellow = c2.number_input("Y (0-3)", min_value=0, max_value=MAX_Y, step=1, key="yy")
-    z_yellow = c3.number_input("Z (0-2)", min_value=0, max_value=MAX_Z, step=1, key="yz")
+    x_yellow = c1.number_input("X (0-10)", min_value=0, max_value=MAX_X, step=1, key="yx")
+    y_yellow = c2.number_input("Y (0-10)", min_value=0, max_value=MAX_Y, step=1, key="yy")
+    z_yellow = c3.number_input("Z (0-10)", min_value=0, max_value=MAX_Z, step=1, key="yz")
 
     st.session_state.x_red = x_red
     st.session_state.y_red = y_red
@@ -311,10 +313,10 @@ with col_right:
             xaxis=dict(range=[0, MAX_X + 1], title=f"Ox (0→{MAX_X})"),
             yaxis=dict(range=[0, MAX_Y + 1], title=f"Oy (0→{MAX_Y})"),
             zaxis=dict(range=[0, MAX_Z + 1], title=f"Oz (0→{MAX_Z})"),
-            camera=dict(eye=dict(x=1.8, y=-1.8, z=1.4)),
+            camera=dict(eye=dict(x=1.6, y=-1.6, z=1.3)),
         ),
         margin=dict(l=0, r=0, b=0, t=30),
     )
     st.plotly_chart(fig, use_container_width=True)
 
-st.caption(f"💡 Ox={MAX_X} ô | Oy={MAX_Y} ô | Oz={MAX_Z} ô  •  Nhà (đỏ) & Trực thăng (vàng)")
+st.caption("💡 Ox = Oy = Oz = 10  •  Nhà mặc định Z = 3  •  Trực thăng (vàng)")
