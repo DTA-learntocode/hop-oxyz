@@ -11,7 +11,7 @@ st.set_page_config(
 
 # ====================== SESSION STATE ======================
 defaults = {
-    "x_red": 3, "y_red": 2, "z_red": 3,          # <-- Z Nhà mặc định = 3
+    "x_red": 3, "y_red": 2, "z_red": 3,
     "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,
     "floor_ok": False,
     "wall_ok": False,
@@ -112,12 +112,12 @@ with col_left:
     st.info(
         f"**Thang đo:** Ox = 0→{MAX_X} | Oy = 0→{MAX_Y} | Oz = 0→{MAX_Z}\n\n"
         "**ID:** 0=(0,0,0) | 1=(10,0,0) | 2=(0,10,0) | 3=(0,0,10)\n\n"
-        "🏠 Nhà mặc định **Z = 3**"
+        "nhà mặc định **Z = 3**"
     )
 
     tab_tuong, tab_san = st.tabs(["🧱 Mặt Tường (Oxz)", "🟫 Mặt Sàn (Oxy)"])
 
-    # ---------- TƯỜNG Oxz (Trực thăng - Vàng) ----------
+    # ---------- TƯỜNG Oxz (trực thăng - Vàng) ----------
     with tab_tuong:
         st.markdown("**Cần ID 0, 1, 3**")
         img_tuong = st.camera_input("Chụp mặt tường Oxz", key="cam_tuong")
@@ -135,7 +135,7 @@ with col_left:
                 pin = detect_color_centroid(img, "yellow")
                 if pin is not None:
                     cv2.circle(img_draw, pin, 12, (0, 255, 255), 3)
-                    cv2.putText(img_draw, "Truc thang", (pin[0]+15, pin[1]),
+                    cv2.putText(img_draw, "truc thang", (pin[0]+15, pin[1]),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
                     if all(k in centers for k in [0, 1, 3]):
@@ -157,7 +157,7 @@ with col_left:
                             st.session_state.wall_ok = True
 
                             st.success(
-                                f"🤖 **Đã cập nhật Trực thăng**\n"
+                                f"🤖 **Đã cập nhật trực thăng**\n"
                                 f"Liên tục: X ≈ {x_cont:.2f}, Z ≈ {z_cont:.2f}\n"
                                 f"→ **Số nguyên: X = {auto_x}, Z = {auto_z}**"
                             )
@@ -166,14 +166,14 @@ with col_left:
                     else:
                         st.warning("⚠️ Chưa đủ ID 0, 1, 3.")
                 else:
-                    st.warning("⚠️ Không thấy Trực thăng (màu vàng).")
+                    st.warning("⚠️ Không thấy trực thăng (màu vàng).")
 
                 st.image(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB), use_container_width=True)
             else:
                 st.error("❌ Không tìm thấy mã ArUco.")
                 st.image(debug_img, caption="Ảnh debug", use_container_width=True, clamp=True)
 
-    # ---------- SÀN Oxy (Nhà - Đỏ) ----------
+    # ---------- SÀN Oxy (nhà - Đỏ) ----------
     with tab_san:
         st.markdown("**Cần ID 0, 1, 2**")
         img_san = st.camera_input("Chụp mặt sàn Oxy", key="cam_san")
@@ -191,7 +191,7 @@ with col_left:
                 pin = detect_color_centroid(img, "red")
                 if pin is not None:
                     cv2.circle(img_draw, pin, 12, (0, 0, 255), 3)
-                    cv2.putText(img_draw, "Nha", (pin[0]+15, pin[1]),
+                    cv2.putText(img_draw, "nha", (pin[0]+15, pin[1]),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
                     if all(k in centers for k in [0, 1, 2]):
@@ -204,17 +204,14 @@ with col_left:
                             auto_x = int(round(x_cont))
                             auto_y = int(round(y_cont))
 
-                            # Chỉ cập nhật X và Y, GIỮ NGUYÊN Z = 3
                             st.session_state.x_red = auto_x
                             st.session_state.y_red = auto_y
-                            # st.session_state.z_red giữ nguyên (mặc định 3)
                             st.session_state.rx = auto_x
                             st.session_state.ry = auto_y
-                            # không đụng key "rz"
                             st.session_state.floor_ok = True
 
                             st.success(
-                                f"🤖 **Đã cập nhật Nhà**\n"
+                                f"🤖 **Đã cập nhật nhà**\n"
                                 f"Liên tục: X ≈ {x_cont:.2f}, Y ≈ {y_cont:.2f}\n"
                                 f"→ **Số nguyên: X = {auto_x}, Y = {auto_y}** (Z giữ = 3)"
                             )
@@ -223,7 +220,7 @@ with col_left:
                     else:
                         st.warning("⚠️ Chưa đủ ID 0, 1, 2.")
                 else:
-                    st.warning("⚠️ Không thấy Nhà (màu đỏ).")
+                    st.warning("⚠️ Không thấy nhà (màu đỏ).")
 
                 st.image(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB), use_container_width=True)
             else:
@@ -237,17 +234,17 @@ with col_left:
     if st.session_state.floor_ok and st.session_state.wall_ok:
         st.success("✅ Đã quét đủ cả 2 mặt → tọa độ đã sẵn sàng tính toán")
     elif st.session_state.floor_ok:
-        st.info("🏠 Đã có tọa độ Nhà (sàn)")
+        st.info("🏠 Đã có tọa độ nhà (sàn)")
     elif st.session_state.wall_ok:
-        st.info("🚁 Đã có tọa độ Trực thăng (tường)")
+        st.info("🚁 Đã có tọa độ trực thăng (tường)")
 
-    st.markdown("🏠 **Nhà (màu đỏ)** — Z mặc định = 3")
+    st.markdown("🏠 **nhà (màu đỏ)** — Z mặc định = 3")
     c1, c2, c3 = st.columns(3)
     x_red = c1.number_input("X (0-10)", min_value=0, max_value=MAX_X, step=1, key="rx")
     y_red = c2.number_input("Y (0-10)", min_value=0, max_value=MAX_Y, step=1, key="ry")
     z_red = c3.number_input("Z (0-10)", min_value=0, max_value=MAX_Z, step=1, key="rz")
 
-    st.markdown("🚁 **Trực thăng (màu vàng)**")
+    st.markdown("🚁 **trực thăng (màu vàng)**")
     c1, c2, c3 = st.columns(3)
     x_yellow = c1.number_input("X (0-10)", min_value=0, max_value=MAX_X, step=1, key="yx")
     y_yellow = c2.number_input("Y (0-10)", min_value=0, max_value=MAX_Y, step=1, key="yy")
@@ -279,8 +276,8 @@ with col_left:
 
     st.markdown("---")
     st.subheader("📊 Kết quả tính toán")
-    st.write(f"🏠 **Nhà:** `{list(P_red)}`")
-    st.write(f"🚁 **Trực thăng:** `{list(P_yellow)}`")
+    st.write(f"🏠 **nhà:** `{list(P_red)}`")
+    st.write(f"🚁 **trực thăng:** `{list(P_yellow)}`")
     st.warning(f"📏 Khoảng cách: **{distance:.2f} đơn vị**")
     st.success(f"📦 Thả thẳng đứng: `{list(P_drop)}`")
     st.info(f"✈️ Thả khi bay: `({P_release[0]:.2f}, {P_release[1]:.2f}, {P_release[2]})`")
@@ -292,21 +289,21 @@ with col_right:
     fig.add_trace(go.Scatter3d(
         x=[P_red[0]], y=[P_red[1]], z=[P_red[2]],
         mode="markers+text", marker=dict(size=12, color="red", symbol="diamond"),
-        text=["Nhà"], name="Nhà"
+        text=["nhà"], name="nhà"
     ))
     fig.add_trace(go.Scatter3d(
         x=[P_yellow[0]], y=[P_yellow[1]], z=[P_yellow[2]],
         mode="markers+text", marker=dict(size=12, color="gold", symbol="square"),
-        text=["Trực thăng"], name="Trực thăng"
+        text=["trực thăng"], name="trực thăng"
     ))
     fig.add_trace(go.Scatter3d(
         x=[P_release[0]], y=[P_release[1]], z=[P_release[2]],
         mode="markers+text", marker=dict(size=10, color="purple", symbol="cross"),
-        text=["Điểm thả"], name="Điểm thả"
+        text=["điểm thả"], name="điểm thả"
     ))
     fig.add_trace(go.Scatter3d(
         x=[P_yellow[0], P_red[0]], y=[P_yellow[1], P_red[1]], z=[P_yellow[2], P_red[2]],
-        mode="lines", line=dict(color="orange", width=5, dash="dash"), name="Khoảng cách"
+        mode="lines", line=dict(color="orange", width=5, dash="dash"), name="khoảng cách"
     ))
     fig.update_layout(
         scene=dict(
@@ -319,4 +316,4 @@ with col_right:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-st.caption("💡 Ox = Oy = Oz = 10  •  Nhà mặc định Z = 3  •  Trực thăng (vàng)")
+st.caption("💡 Ox = Oy = Oz = 10  •  nhà mặc định Z = 3  •  trực thăng (vàng)")
