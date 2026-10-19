@@ -1,5 +1,6 @@
 streamlit
-plotly
-numpy
 opencv-python-headless
-opencv-contrib-python-headless
+numpy
+plotly
+Pillow
+tensorflow==2.12.1
