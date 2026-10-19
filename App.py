@@ -5,6 +5,11 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
+# Ép TensorFlow chạy chế độ Keras cũ để đọc model .h5 từ Teachable Machine không bị lỗi input
+import os
+
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
 st.set_page_config(
     page_title="Hộp Oxyz - Teachable Machine Mobile",
     layout="wide",
@@ -18,7 +23,7 @@ LABELS_PATH = BASE_DIR / "labels.txt"
 defaults = {
     "x_red": 3,
     "y_red": 2,
-    "z_red": 3,  # nhà mặc định Z = 3
+    "z_red": 3,  # Nhà mặc định Z = 3
     "x_yellow": 5,
     "y_yellow": 0,
     "z_yellow": 1,
@@ -43,27 +48,19 @@ col_left, col_right = st.columns([1, 1.2])
 @st.cache_resource(show_spinner="Đang tải model Teachable Machine...")
 def load_tm_model():
     import tensorflow as tf
-    from tensorflow.keras.layers import DepthwiseConv2D
 
-    class FixedDepthwiseConv2D(DepthwiseConv2D):
-
-        def __init__(self, *args, **kwargs):
-            kwargs.pop("groups", None)
-            super().__init__(*args, **kwargs)
-
-    model = tf.keras.models.load_model(
-        str(MODEL_PATH),
-        custom_objects={"DepthwiseConv2D": FixedDepthwiseConv2D},
-        compile=False,
-    )
+    model = tf.keras.models.load_model(str(MODEL_PATH), compile=False)
     labels = []
-    with open(LABELS_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split(maxsplit=1)
-            labels.append(parts[1].strip() if len(parts) > 1 else parts[0])
+    if LABELS_PATH.exists():
+        with open(LABELS_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split(maxsplit=1)
+                labels.append(
+                    parts[1].strip() if len(parts) > 1 else parts[0]
+                )
     return model, labels
 
 
@@ -95,7 +92,6 @@ def locate_class(img_bgr, model, class_index, min_score=MIN_SCORE):
                     rgb[y : y + win, x : x + win], (224, 224)
                 )
                 crops.append(patch)
-                # Quy đổi ngược lại tọa độ về ảnh gốc ban đầu
                 orig_x = (x + win / 2) / scale_input
                 orig_y = (y + win / 2) / scale_input
                 metas.append((orig_x, orig_y))
@@ -156,13 +152,14 @@ with col_left:
     st.subheader("📷 Quét ArUco & AI Teachable Machine")
     st.info(
         f"**Thang đo:** Ox = 0→{MAX_X} | Oy = 0→{MAX_Y} | Oz = 0→{MAX_Z}\n\n"
-        "**Mốc ID:** 0=(0,0,0) | 1=(10,0,0) | 2=(0,10,0) | 3=(0,0,10)\n\n"
-        "Nhận diện Nhà & Trực thăng hoàn toàn bằng file **.h5**."
+        "**Mốc ID tường (Oxz):** 0, 1, 3 | **Mốc ID sàn (Oxy):** 0, 1, 2\n\n"
+        "Nhận diện Nhà & Trực thăng bằng file **.h5**."
     )
 
     if not MODEL_PATH.exists() or not LABELS_PATH.exists():
         st.error(
-            "Thiếu `keras_model.h5` hoặc `labels.txt` trong cùng thư mục."
+            "Thiếu file `keras_model.h5` hoặc `labels.txt` trong cùng thư mục với"
+            " app.py."
         )
         st.stop()
 
@@ -187,9 +184,20 @@ with col_left:
             img_draw = img.copy()
 
             if ids is not None:
+                flat_ids = ids.flatten()
+                detected_set = set(flat_ids)
+                target_wall = {0, 1, 3}
+
                 aruco.drawDetectedMarkers(img_draw, corners, ids)
                 centers = get_marker_centers(corners, ids)
-                st.success(f"Phát hiện mã ArUco: `{list(ids.flatten())}`")
+                st.success(f"Phát hiện mã ArUco: `{list(flat_ids)}`")
+
+                if target_wall.issubset(detected_set):
+                    st.info(
+                        "✅ Đã quét ĐỦ BỘ MỐC trên tường (ID 0, ID 1, ID 3)!"
+                    )
+                else:
+                    st.warning("⚠️ Chưa đủ mốc chuẩn trên tường (Cần ID 0, 1, 3).")
 
                 with st.spinner("AI đang quét trực thăng..."):
                     found = locate_class(img, tm_model, CLASS_TRUC_THANG)
@@ -207,7 +215,7 @@ with col_left:
                         2,
                     )
 
-                    if all(k in centers for k in [0, 1, 3]):
+                    if target_wall.issubset(detected_set):
                         pts_src = [centers[0], centers[1], centers[3]]
                         pts_dst = [(0, 0), (MAX_X, 0), (0, MAX_Z)]
                         result = compute_affine_coords(
@@ -223,12 +231,11 @@ with col_left:
                             st.session_state.wall_ok = True
                             st.success(
                                 f"✅ **Đã nhận diện Trực thăng** ({score:.0%})\n\n"
-                                f"Tọa độ nguyên: **X = {auto_x}, Z = {auto_z}**"
+                                f"Tọa độ số nguyên: **X = {auto_x}, Z ="
+                                f" {auto_z}**"
                             )
                         else:
                             st.warning("Không tính được tọa độ Affine.")
-                    else:
-                        st.warning("Thiếu một trong các mốc ID 0, 1, 3.")
                 else:
                     st.warning(
                         f"Không tìm thấy Trực thăng (Độ tin cậy <"
@@ -241,12 +248,6 @@ with col_left:
                 )
             else:
                 st.error("Không tìm thấy mã ArUco nào trên tường.")
-                st.image(
-                    debug_img,
-                    caption="Ảnh Debug",
-                    use_container_width=True,
-                    clamp=True,
-                )
 
     # ---------- SÀN: Nhà ----------
     with tab_san:
@@ -261,9 +262,18 @@ with col_left:
             img_draw = img.copy()
 
             if ids is not None:
+                flat_ids = ids.flatten()
+                detected_set = set(flat_ids)
+                target_floor = {0, 1, 2}
+
                 aruco.drawDetectedMarkers(img_draw, corners, ids)
                 centers = get_marker_centers(corners, ids)
-                st.success(f"Phát hiện mã ArUco: `{list(ids.flatten())}`")
+                st.success(f"Phát hiện mã ArUco: `{list(flat_ids)}`")
+
+                if target_floor.issubset(detected_set):
+                    st.info("✅ Đã quét ĐỦ BỘ MỐC dưới sàn (ID 0, ID 1, ID 2)!")
+                else:
+                    st.warning("⚠️ Chưa đủ mốc chuẩn dưới sàn (Cần ID 0, 1, 2).")
 
                 with st.spinner("AI đang quét Nhà..."):
                     found = locate_class(img, tm_model, CLASS_NHA)
@@ -281,7 +291,7 @@ with col_left:
                         2,
                     )
 
-                    if all(k in centers for k in [0, 1, 2]):
+                    if target_floor.issubset(detected_set):
                         pts_src = [centers[0], centers[1], centers[2]]
                         pts_dst = [(0, 0), (MAX_X, 0), (0, MAX_Y)]
                         result = compute_affine_coords(
@@ -296,13 +306,11 @@ with col_left:
                             st.session_state.floor_ok = True
                             st.success(
                                 f"✅ **Đã nhận diện Nhà** ({score:.0%})\n\n"
-                                f"Tọa độ nguyên: **X = {auto_x}, Y = {auto_y}**"
-                                f" (Z giữ = 3)"
+                                f"Tọa độ số nguyên: **X = {auto_x}, Y ="
+                                f" {auto_y}** (Z giữ = 3)"
                             )
                         else:
                             st.warning("Không tính được tọa độ Affine.")
-                    else:
-                        st.warning("Thiếu một trong các mốc ID 0, 1, 2.")
                 else:
                     st.warning(
                         f"Không tìm thấy Nhà (Độ tin cậy < {MIN_SCORE:.0%})."
@@ -314,16 +322,10 @@ with col_left:
                 )
             else:
                 st.error("Không tìm thấy mã ArUco nào dưới sàn.")
-                st.image(
-                    debug_img,
-                    caption="Ảnh Debug",
-                    use_container_width=True,
-                    clamp=True,
-                )
 
-    # ---------- HIỆU CHỈNH THỦ CÔNG ----------
+    # ---------- HIỆU CHỈNH THỦ CÔNG (SỐ NGUYÊN) ----------
     st.markdown("---")
-    st.markdown("#### ⚙️ Điều chỉnh tọa độ")
+    st.markdown("#### ⚙️ Thiết lập & Hiệu chỉnh tọa độ (Số nguyên)")
 
     c1, c2, c3 = st.columns(3)
     x_red = c1.number_input(
@@ -407,10 +409,10 @@ with col_left:
 
     st.markdown("---")
     st.subheader("📊 Kết quả Phân tích Vật lý")
-    st.write(f"🏠 **Nhà:** `{list(P_red)}`")
-    st.write(f"🚁 **Trực thăng:** `{list(P_yellow)}`")
+    st.write(f"🏠 **Nhà:** `{list(P_red.astype(int))}`")
+    st.write(f"🚁 **Trực thăng:** `{list(P_yellow.astype(int))}`")
     st.warning(f"📏 Khoảng cách không gian: **{distance:.2f}** đơn vị")
-    st.success(f"📦 Thả thẳng đứng: `{list(P_drop)}`")
+    st.success(f"📦 Thả thẳng đứng: `{list(P_drop.astype(int))}`")
     st.info(
         f"✈️ Thả khi bay: `({P_release[0]:.2f}, {P_release[1]:.2f},"
         f" {P_release[2]})`"
@@ -472,3 +474,8 @@ with col_right:
         margin=dict(l=0, r=0, b=0, t=30),
     )
     st.plotly_chart(fig, use_container_width=True)
+
+st.caption(
+    "💡 Dự án STEM 'Hộp Oxyz Thông Minh' - Sử dụng mô hình Teachable Machine"
+    " (.h5) & ArUco."
+)
