@@ -70,40 +70,90 @@ def detect_color_centroid(img, color="yellow"):
     return int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
 
 def preprocess_for_aruco(img):
+    """Preprocess mạnh hơn để bắt marker nhỏ."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    
+    # Bilateral giữ cạnh + giảm nhiễu
+    gray = cv2.bilateralFilter(gray, 9, 75, 75)
+    
+    # CLAHE mạnh hơn
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
-    blur = cv2.GaussianBlur(enhanced, (0, 0), 1.0)
-    return cv2.addWeighted(enhanced, 1.5, blur, -0.5, 0)
+    
+    # Unsharp mask mạnh
+    blur = cv2.GaussianBlur(enhanced, (0, 0), 1.2)
+    sharp = cv2.addWeighted(enhanced, 1.8, blur, -0.8, 0)
+    
+    return sharp
 
 def create_detector():
+    """Detector tối ưu cho ArUco 4x4 nhỏ."""
     aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
     parameters = aruco.DetectorParameters()
+    
+    # Adaptive threshold rộng hơn → chịu được marker nhỏ + ánh sáng thay đổi
     parameters.adaptiveThreshWinSizeMin = 3
-    parameters.adaptiveThreshWinSizeMax = 35
-    parameters.adaptiveThreshWinSizeStep = 6
-    parameters.adaptiveThreshConstant = 5
-    parameters.minMarkerPerimeterRate = 0.01
-    parameters.maxMarkerPerimeterRate = 5.0
-    parameters.polygonalApproxAccuracyRate = 0.07
-    parameters.minCornerDistanceRate = 0.03
+    parameters.adaptiveThreshWinSizeMax = 45
+    parameters.adaptiveThreshWinSizeStep = 4
+    parameters.adaptiveThreshConstant = 7
+    
+    # Cho phép marker rất nhỏ
+    parameters.minMarkerPerimeterRate = 0.003   # ← quan trọng nhất
+    parameters.maxMarkerPerimeterRate = 4.0
+    
+    # Độ chính xác polygon & góc
+    parameters.polygonalApproxAccuracyRate = 0.05
+    parameters.minCornerDistanceRate = 0.02
     parameters.minDistanceToBorder = 1
+    
+    # Corner refinement mạnh
     parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
-    parameters.cornerRefinementWinSize = 5
-    parameters.cornerRefinementMaxIterations = 50
-    parameters.cornerRefinementMinAccuracy = 0.05
+    parameters.cornerRefinementWinSize = 7
+    parameters.cornerRefinementMaxIterations = 60
+    parameters.cornerRefinementMinAccuracy = 0.03
+    
+    # Cho phép marker lộn ngược / xuyên sáng
     parameters.detectInvertedMarker = True
+    parameters.errorCorrectionRate = 0.6
+    
     return aruco.ArucoDetector(aruco_dict, parameters)
 
 def detect_markers_robust(img):
+    """Thử nhiều phiên bản ảnh để tăng tỷ lệ nhận diện marker nhỏ."""
     detector = create_detector()
+    
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     processed = preprocess_for_aruco(img)
-    corners1, ids1, _ = detector.detectMarkers(gray)
-    corners2, ids2, _ = detector.detectMarkers(processed)
-    if ids1 is not None and (ids2 is None or len(ids1) >= len(ids2)):
-        return corners1, ids1, gray
-    return corners2, ids2, processed
+    
+    # Thử scale lên 1.5 lần (hữu ích khi marker nhỏ trong khung hình)
+    h, w = gray.shape
+    scaled = cv2.resize(processed, (int(w * 1.5), int(h * 1.5)), interpolation=cv2.INTER_CUBIC)
+    
+    candidates = [
+        (gray, 1.0),
+        (processed, 1.0),
+        (scaled, 1.5),
+    ]
+    
+    best_corners, best_ids, best_img = None, None, gray
+    best_count = 0
+    
+    for img_try, scale in candidates:
+        corners, ids, _ = detector.detectMarkers(img_try)
+        count = 0 if ids is None else len(ids)
+        
+        if count > best_count:
+            best_count = count
+            best_corners = corners
+            best_ids = ids
+            best_img = img_try
+            
+            # Nếu đang dùng ảnh scale → đưa tọa độ về kích thước gốc
+            if scale != 1.0 and corners is not None:
+                for i in range(len(corners)):
+                    corners[i] = corners[i] / scale
+    
+    return best_corners, best_ids, best_img
 
 # ====================== GIAO DIỆN BÊN TRÁI ======================
 with col_left:
