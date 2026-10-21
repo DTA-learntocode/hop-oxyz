@@ -35,13 +35,17 @@ def detect_color_centroid(img, color="yellow"):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
     if color == "yellow":
+        # Vàng - cam
         mask = cv2.inRange(hsv, np.array([5, 80, 80]), np.array([35, 255, 255]))
-    else:  # red
-        mask1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
-        mask2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
+        min_area = 300
+    else:
+        # Đỏ (nới rộng hơn để dễ bắt)
+        mask1 = cv2.inRange(hsv, np.array([0, 50, 50]), np.array([12, 255, 255]))
+        mask2 = cv2.inRange(hsv, np.array([165, 50, 50]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
+        min_area = 150          # giảm ngưỡng cho trực thăng
 
-    kernel = np.ones((7, 7), np.uint8)
+    kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
@@ -50,7 +54,7 @@ def detect_color_centroid(img, color="yellow"):
         return None
     
     largest = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(largest) < 300:
+    if cv2.contourArea(largest) < min_area:
         return None
     
     M = cv2.moments(largest)
