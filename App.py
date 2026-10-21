@@ -32,8 +32,10 @@ st.markdown("### hệ thống oxyz – ox = oy = oz = 10 (không dùng ArUco)")
 col_left, col_right = st.columns([1.15, 1])
 
 # ====================== HÀM TIỆN ÍCH ======================
-def detect_color_centroid(img, color="orange"):
-    """nhà = cam | trực thăng = đỏ (đã tách rõ để không đụng nhau)"""
+def detect_color_centroid(img, color="orange", exclude_pts=None, exclude_radius=25):
+    """nhà = cam | trực thăng = đỏ (đã tách rõ để không đụng nhau)
+       exclude_pts: danh sách các điểm tham chiếu cần loại bỏ (tránh bắt nhầm marker)
+    """
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
     if color == "orange":
@@ -45,7 +47,13 @@ def detect_color_centroid(img, color="orange"):
         mask1 = cv2.inRange(hsv, np.array([0, 100, 80]), np.array([7, 255, 255]))
         mask2 = cv2.inRange(hsv, np.array([170, 100, 80]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
-        min_area = 100
+        min_area = 80   # giảm vì trực thăng thường nhỏ hơn nhà
+
+    # === LOẠI BỎ VÙNG QUANH CÁC ĐIỂM THAM CHIẾU (tránh bắt nhầm marker đỏ/cam) ===
+    if exclude_pts:
+        for pt in exclude_pts:
+            if pt is not None:
+                cv2.circle(mask, (int(pt[0]), int(pt[1])), exclude_radius, 0, -1)
 
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
@@ -64,26 +72,31 @@ def detect_color_centroid(img, color="orange"):
         return None
     return int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
 
+
 def compute_floor_homography(pts):
     src = np.float32([pts["O"], pts["X"], pts["Y"], pts["B"]])
     dst = np.float32([[0, 0], [MAX_X, 0], [0, MAX_Y], [MAX_X, MAX_Y]])
     H, _ = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
     return H
 
+
 def compute_wall_affine(pts):
     src = np.float32([pts["O"], pts["X"], pts["Z"]])
     dst = np.float32([[0, 0], [MAX_X, 0], [0, MAX_Z]])
     return cv2.getAffineTransform(src, dst)
+
 
 def apply_homography(H, pin):
     pt = np.array([[[pin[0], pin[1]]]], dtype=np.float32)
     out = cv2.perspectiveTransform(pt, H)[0][0]
     return float(np.clip(out[0], 0, MAX_X)), float(np.clip(out[1], 0, MAX_Y))
 
+
 def apply_affine(M, pin):
     pt = np.array([[[pin[0], pin[1]]]], dtype=np.float32)
     out = cv2.transform(pt, M)[0][0]
     return float(np.clip(out[0], 0, MAX_X)), float(np.clip(out[1], 0, MAX_Z))
+
 
 # ====================== CỘT TRÁI ======================
 with col_left:
@@ -210,6 +223,7 @@ with col_left:
 
         # ---------- PHÁT HIỆN MÀU ----------
         all_set = all(st.session_state.points[p] is not None for p in point_names)
+
         if all_set:
             st.markdown("---")
             st.subheader("3. Kết quả phát hiện")
@@ -217,8 +231,11 @@ with col_left:
             pts = st.session_state.points
             img = st.session_state.img_bgr
 
-            pin_house = detect_color_centroid(img, "orange")
-            pin_heli  = detect_color_centroid(img, "red")
+            # Lấy danh sách điểm để loại trừ
+            exclude = [pts[p] for p in ["O", "X", "Y", "Z", "B"] if pts[p] is not None]
+
+            pin_house = detect_color_centroid(img, "orange", exclude_pts=exclude, exclude_radius=25)
+            pin_heli  = detect_color_centroid(img, "red",   exclude_pts=exclude, exclude_radius=30)
 
             img_draw = img.copy()
             colors_bgr = {
@@ -352,8 +369,8 @@ with col_right:
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
-
     fig3d = go.Figure()
+
     fig3d.add_trace(go.Scatter3d(
         x=[P_red[0]], y=[P_red[1]], z=[P_red[2]],
         mode="markers+text", marker=dict(size=12, color="orange", symbol="diamond"),
@@ -391,4 +408,4 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Đã tách rõ đỏ và cam · Trực thăng đỏ · Nhà cam · Chỉnh tay không bị reset")
+st.caption("Đã tách rõ đỏ và cam · Trực thăng đỏ · Nhà cam · Chỉnh tay không bị reset · Đã loại trừ marker tham chiếu")
