@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hộp Oxyz - Chọn 5 điểm",
+    page_title="Hộp Oxyz",
     layout="wide",
 )
 
@@ -27,7 +27,7 @@ for k, v in defaults.items():
 
 MAX_X, MAX_Y, MAX_Z = 10, 10, 10
 
-st.markdown("### hệ thống oxyz – ox = oy = oz = 10 (không dùng ArUco)")
+st.markdown("### hệ thống oxyz cứu trợ")
 
 col_left, col_right = st.columns([1.15, 1])
 
@@ -211,7 +211,7 @@ with col_left:
         all_set = all(st.session_state.points[p] is not None for p in point_names)
         if all_set:
             st.markdown("---")
-            st.subheader("3. Kết quả phát hiện")
+            st.subheader("3. Kết quả phát hiện - đã làm tròn thông số")
 
             pts = st.session_state.points
             img = st.session_state.img_bgr
