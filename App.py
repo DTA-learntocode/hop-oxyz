@@ -84,7 +84,6 @@ def apply_affine(M, pin):
     pt = np.array([[[pin[0], pin[1]]]], dtype=np.float32)
     out = cv2.transform(pt, M)[0][0]
     return float(np.clip(out[0], 0, MAX_X)), float(np.clip(out[1], 0, MAX_Z))
-
 # ====================== CỘT TRÁI ======================
 with col_left:
     st.subheader("1. Chụp / tải ảnh mô hình")
@@ -160,7 +159,7 @@ with col_left:
                     text=[name],
                     textposition="top center",
                     textfont=dict(size=15, color="white", family="Arial Black"),
-                    hoverinfo="skip",
+hoverinfo="skip",
                     showlegend=False
                 ))
 
@@ -229,7 +228,7 @@ with col_left:
             if pin_house:
                 cv2.circle(img_draw, pin_house, 14, (0, 165, 255), 3)  # cam
                 cv2.putText(img_draw, "nha", (pin_house[0]+12, pin_house[1]),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
+cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
             if pin_heli:
                 cv2.circle(img_draw, pin_heli, 14, (0, 0, 255), 3)
                 cv2.putText(img_draw, "truc thang", (pin_heli[0]+12, pin_heli[1]),
@@ -290,7 +289,7 @@ with col_right:
     st.subheader("Tọa độ hiện tại (có thể chỉnh tay)")
 
     if st.session_state.floor_ok and st.session_state.wall_ok:
-        st.success("Đã có đủ tọa độ cả 2 vật")
+st.success("Đã có đủ tọa độ cả 2 vật")
     elif st.session_state.floor_ok:
         st.info("Đã có tọa độ nhà")
     elif st.session_state.wall_ok:
@@ -362,7 +361,7 @@ with col_right:
     fig3d.add_trace(go.Scatter3d(
         x=[P_yellow[0]], y=[P_yellow[1]], z=[P_yellow[2]],
         mode="markers+text", marker=dict(size=12, color="red", symbol="square"),
-        text=["trực thăng"], name="trực thăng",
+text=["trực thăng"], name="trực thăng",
     ))
     fig3d.add_trace(go.Scatter3d(
         x=[P_drop[0]], y=[P_drop[1]], z=[P_drop[2]],
