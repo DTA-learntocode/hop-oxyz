@@ -3,4 +3,3 @@ plotly
 numpy
 opencv-python-headless
 opencv-contrib-python-headless
-streamlit-drawable-canvas>=0.9.3
