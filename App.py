@@ -10,8 +10,8 @@ st.set_page_config(
 
 # ====================== SESSION STATE ======================
 defaults = {
-    "x_red": 3, "y_red": 2, "z_red": 3,
-    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,
+    "x_red": 3, "y_red": 2, "z_red": 3,          # nhà (vàng)
+    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,  # trực thăng (đỏ) - giữ tên biến cũ
     "floor_ok": False,
     "wall_ok": False,
     "points": {"O": None, "X": None, "Y": None, "Z": None, "B": None},
@@ -31,12 +31,15 @@ col_left, col_right = st.columns([1, 1.2])
 
 # ====================== HÀM TIỆN ÍCH ======================
 def detect_color_centroid(img, color="yellow"):
-    """nhà = vàng | trực thăng = xanh dương"""
+    """nhà = vàng | trực thăng = đỏ"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    
     if color == "yellow":
         mask = cv2.inRange(hsv, np.array([15, 70, 70]), np.array([40, 255, 255]))
-    else:  # blue
-        mask = cv2.inRange(hsv, np.array([90, 60, 40]), np.array([130, 255, 255]))
+    else:  # red (xử lý cả 2 khoảng vì đỏ bị wrap quanh 0)
+        mask1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
+        mask2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
+        mask = cv2.bitwise_or(mask1, mask2)
 
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
@@ -91,7 +94,7 @@ with col_left:
         "- **Y** = (0,10,0) góc đáy bên trái\n"
         "- **Z** = (0,0,10) đỉnh cao nhất 2 vách giao\n"
         "- **B** = (10,10,0) góc đối diện gốc trên mặt đáy\n\n"
-        "Sau đó hệ thống tự tìm nhà (vàng) & trực thăng (xanh dương)."
+        "**nhà** = màu **vàng** · **trực thăng** = màu **đỏ**"
     )
 
     img_file = st.camera_input("Chụp ảnh mô hình", key="cam") or \
@@ -128,21 +131,41 @@ with col_left:
             key="radio_point"
         )
 
-        # Hiển thị ảnh + điểm đã chọn bằng Plotly (có thể click)
+        # Hiển thị ảnh + điểm đã chọn (dấu rõ ràng)
         fig = go.Figure()
         fig.add_trace(go.Image(z=img_rgb))
 
-        # Vẽ các điểm đã chọn
-        colors = {"O": "red", "X": "lime", "Y": "cyan", "Z": "magenta", "B": "yellow"}
+        # Màu và ký hiệu rõ cho từng điểm đã chọn
+        point_style = {
+            "O": dict(color="red",     symbol="circle", size=18),
+            "X": dict(color="lime",    symbol="circle", size=18),
+            "Y": dict(color="cyan",    symbol="circle", size=18),
+            "Z": dict(color="magenta", symbol="circle", size=18),
+            "B": dict(color="yellow",  symbol="circle", size=18),
+        }
+
         for name, pt in st.session_state.points.items():
             if pt is not None:
+                style = point_style[name]
+                # Vòng ngoài lớn (dấu đã chọn)
+                fig.add_trace(go.Scatter(
+                    x=[pt[0]], y=[pt[1]],
+                    mode="markers",
+                    marker=dict(size=28, color=style["color"], opacity=0.35,
+                                symbol="circle"),
+                    hoverinfo="skip",
+                    showlegend=False
+                ))
+                # Điểm chính + chữ
                 fig.add_trace(go.Scatter(
                     x=[pt[0]], y=[pt[1]],
                     mode="markers+text",
-                    marker=dict(size=14, color=colors[name], symbol="circle",
-                                line=dict(width=2, color="white")),
+                    marker=dict(size=style["size"], color=style["color"],
+                                symbol=style["symbol"],
+                                line=dict(width=3, color="white")),
                     text=[name],
                     textposition="top center",
+                    textfont=dict(size=16, color="white", family="Arial Black"),
                     name=name,
                     showlegend=False
                 ))
@@ -152,13 +175,12 @@ with col_left:
             height=min(500, int(h * 700 / w)),
             margin=dict(l=0, r=0, t=30, b=0),
             xaxis=dict(visible=False, range=[0, w]),
-            yaxis=dict(visible=False, range=[h, 0]),  # y xuống dưới như ảnh
+            yaxis=dict(visible=False, range=[h, 0]),
             dragmode="pan",
         )
         fig.update_xaxes(showticklabels=False)
         fig.update_yaxes(showticklabels=False)
 
-        # Click để chọn điểm
         selected = st.plotly_chart(
             fig,
             use_container_width=True,
@@ -174,10 +196,10 @@ with col_left:
             v = int(round(pt_data["y"]))
             cur = st.session_state.current_point
             st.session_state.points[cur] = (u, v)
-            st.success(f"Đã gán điểm **{cur}** = ({u}, {v})")
+            st.success(f"Đã chọn điểm **{cur}** tại ({u}, {v})")
             st.rerun()
 
-        # Hiển thị + chỉnh thủ công tọa độ pixel
+        # Chỉnh thủ công tọa độ pixel
         st.markdown("##### Tọa độ pixel hiện tại (có thể sửa thủ công)")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
@@ -189,7 +211,6 @@ with col_left:
                 new_v = st.number_input(f"{name} v", 0, h, v_val, key=f"v_{name}")
                 st.session_state.points[name] = (new_u, new_v)
 
-        # Nút xóa điểm
         if st.button("Xóa tất cả điểm"):
             st.session_state.points = {"O": None, "X": None, "Y": None, "Z": None, "B": None}
             st.rerun()
@@ -204,9 +225,9 @@ with col_left:
             pts = st.session_state.points
             img = st.session_state.img_bgr
 
-            # Phát hiện nhà (vàng) và trực thăng (xanh)
+            # Phát hiện nhà (vàng) và trực thăng (đỏ)
             pin_house = detect_color_centroid(img, "yellow")
-            pin_heli = detect_color_centroid(img, "blue")
+            pin_heli  = detect_color_centroid(img, "red")
 
             img_draw = img.copy()
 
@@ -215,9 +236,9 @@ with col_left:
                 cv2.putText(img_draw, "nha", (pin_house[0]+12, pin_house[1]),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
             if pin_heli is not None:
-                cv2.circle(img_draw, pin_heli, 14, (255, 180, 0), 3)
+                cv2.circle(img_draw, pin_heli, 14, (0, 0, 255), 3)
                 cv2.putText(img_draw, "truc thang", (pin_heli[0]+12, pin_heli[1]),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 180, 0), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
             # Vẽ 5 điểm tham chiếu
             for name, pt in pts.items():
@@ -229,10 +250,9 @@ with col_left:
 
             st.image(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB), use_container_width=True)
 
-            # Tính tọa độ
             try:
                 H_floor = compute_floor_homography(pts)
-                M_wall = compute_wall_affine(pts)
+                M_wall  = compute_wall_affine(pts)
 
                 if pin_house is not None:
                     xh, yh = apply_homography(H_floor, pin_house)
@@ -260,9 +280,9 @@ with col_left:
                     st.session_state.yy = 0
                     st.session_state.yz = auto_z
                     st.session_state.wall_ok = True
-                    st.success(f"**Trực thăng (xanh):** X≈{xhe:.2f}, Z≈{zhe:.2f} → **({auto_x}, 0, {auto_z})**")
+                    st.success(f"**Trực thăng (đỏ):** X≈{xhe:.2f}, Z≈{zhe:.2f} → **({auto_x}, 0, {auto_z})**")
                 else:
-                    st.warning("Không thấy trực thăng (màu xanh dương)")
+                    st.warning("Không thấy trực thăng (màu đỏ)")
 
             except Exception as e:
                 st.error(f"Lỗi tính toán: {e}")
@@ -287,7 +307,7 @@ with col_left:
     y_red = c2.number_input("Y (0-10)", 0, MAX_Y, key="ry")
     z_red = c3.number_input("Z (0-10)", 0, MAX_Z, key="rz")
 
-    st.markdown("**trực thăng** (xanh dương)")
+    st.markdown("**trực thăng** (đỏ)")
     c1, c2, c3 = st.columns(3)
     x_yellow = c1.number_input("X (0-10)", 0, MAX_X, key="yx")
     y_yellow = c2.number_input("Y (0-10)", 0, MAX_Y, key="yy")
@@ -336,7 +356,7 @@ with col_right:
     ))
     fig.add_trace(go.Scatter3d(
         x=[P_yellow[0]], y=[P_yellow[1]], z=[P_yellow[2]],
-        mode="markers+text", marker=dict(size=12, color="royalblue", symbol="square"),
+        mode="markers+text", marker=dict(size=12, color="red", symbol="square"),
         text=["trực thăng"], name="trực thăng",
     ))
     fig.add_trace(go.Scatter3d(
@@ -359,4 +379,4 @@ with col_right:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-st.caption("Không dùng ArUco · Chọn 5 điểm thủ công · Tự phát hiện nhà (vàng) & trực thăng (xanh)")
+st.caption("Không dùng ArUco · Chọn 5 điểm thủ công · Nhà vàng · Trực thăng đỏ")
