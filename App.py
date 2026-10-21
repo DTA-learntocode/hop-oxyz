@@ -15,6 +15,7 @@ defaults = {
     "floor_ok": False,
     "wall_ok": False,
     "points": {"O": None, "X": None, "Y": None, "Z": None, "B": None},
+    "heli_pixel": None,          # <-- thêm: vị trí pixel của trực thăng
     "current_point": "O",
     "img_rgb": None,
     "img_bgr": None,
@@ -33,23 +34,17 @@ col_left, col_right = st.columns([1.15, 1])
 
 # ====================== HÀM TIỆN ÍCH ======================
 def detect_color_centroid(img, color="orange", exclude_pts=None, exclude_radius=25):
-    """nhà = cam | trực thăng = đỏ (đã tách rõ để không đụng nhau)
-       exclude_pts: danh sách các điểm tham chiếu cần loại bỏ (tránh bắt nhầm marker)
-    """
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
     if color == "orange":
-        # Cam (tránh vùng vàng và đỏ)
         mask = cv2.inRange(hsv, np.array([10, 100, 100]), np.array([25, 255, 255]))
         min_area = 300
     else:
-        # Đỏ thật (tránh vùng cam)
-        mask1 = cv2.inRange(hsv, np.array([0, 100, 80]), np.array([7, 255, 255]))
-        mask2 = cv2.inRange(hsv, np.array([170, 100, 80]), np.array([180, 255, 255]))
+        mask1 = cv2.inRange(hsv, np.array([0, 70, 70]), np.array([10, 255, 255]))
+        mask2 = cv2.inRange(hsv, np.array([160, 70, 70]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
-        min_area = 80   # giảm vì trực thăng thường nhỏ hơn nhà
+        min_area = 50
 
-    # === LOẠI BỎ VÙNG QUANH CÁC ĐIỂM THAM CHIẾU (tránh bắt nhầm marker đỏ/cam) ===
     if exclude_pts:
         for pt in exclude_pts:
             if pt is not None:
@@ -106,7 +101,7 @@ with col_left:
         "1. Chọn điểm đang muốn gán (O → X → Y → Z → B)\n"
         "2. Di chuột trên ảnh → hiện tọa độ **u, v**\n"
         "3. Nhập số vào ô rồi bấm **Lưu điểm**\n\n"
-        "**nhà** = cam · **trực thăng** = đỏ"
+        "**nhà** = cam (auto) · **trực thăng** = chọn thủ công (vì màu đỏ quá yếu)"
     )
 
     img_file = st.camera_input("Chụp ảnh mô hình", key="cam") or \
@@ -124,7 +119,7 @@ with col_left:
         st.caption(f"Kích thước ảnh gốc: **{w_orig} × {h_orig}** px")
 
         st.markdown("---")
-        st.subheader("2. Chọn 5 điểm tham chiếu")
+        st.subheader("2. Chọn 5 điểm tham chiếu + trực thăng")
 
         point_names = ["O", "X", "Y", "Z", "B"]
         labels = {
@@ -137,8 +132,8 @@ with col_left:
 
         current = st.radio(
             "Đang chọn điểm:",
-            point_names,
-            format_func=lambda x: labels[x],
+            point_names + ["HELI"],
+            format_func=lambda x: labels.get(x, "🚁 Trực thăng (chọn vị trí pixel)"),
             horizontal=True,
             key="radio_point"
         )
@@ -177,6 +172,20 @@ with col_left:
                     showlegend=False
                 ))
 
+        # Vẽ điểm trực thăng nếu đã chọn
+        if st.session_state.heli_pixel is not None:
+            hx, hy = st.session_state.heli_pixel
+            fig.add_trace(go.Scatter(
+                x=[hx * scale], y=[hy * scale],
+                mode="markers+text",
+                marker=dict(size=20, color="red", symbol="x", line=dict(width=3, color="white")),
+                text=["HELI"],
+                textposition="top center",
+                textfont=dict(size=14, color="white", family="Arial Black"),
+                hoverinfo="skip",
+                showlegend=False
+            ))
+
         fig.update_layout(
             margin=dict(l=0, r=0, t=20, b=0),
             xaxis=dict(visible=False, range=[0, disp_w]),
@@ -191,37 +200,60 @@ with col_left:
         st.caption("Di chuột trên ảnh để xem tọa độ u, v")
 
         # Nhập tọa độ điểm
-        st.markdown(f"##### Nhập tọa độ cho điểm **{current}**")
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c1:
-            default_u = st.session_state.points[current][0] if st.session_state.points[current] else w_orig // 2
-            u_val = st.number_input("u (ngang)", 0, w_orig-1, value=int(default_u), key=f"input_u_{current}")
-        with c2:
-            default_v = st.session_state.points[current][1] if st.session_state.points[current] else h_orig // 2
-            v_val = st.number_input("v (dọc)", 0, h_orig-1, value=int(default_v), key=f"input_v_{current}")
-        with c3:
-            st.write("")
-            st.write("")
-            if st.button(f"Lưu điểm {current}", type="primary"):
-                st.session_state.points[current] = (int(u_val), int(v_val))
-                st.success(f"Đã lưu **{current}** = ({u_val}, {v_val})")
-                st.rerun()
+        if current == "HELI":
+            st.markdown("##### Nhập tọa độ pixel của **Trực thăng**")
+            c1, c2, c3 = st.columns([1, 1, 1])
+            with c1:
+                default_u = st.session_state.heli_pixel[0] if st.session_state.heli_pixel else w_orig // 2
+                u_val = st.number_input("u (ngang)", 0, w_orig-1, value=int(default_u), key="input_u_heli")
+            with c2:
+                default_v = st.session_state.heli_pixel[1] if st.session_state.heli_pixel else h_orig // 3
+                v_val = st.number_input("v (dọc)", 0, h_orig-1, value=int(default_v), key="input_v_heli")
+            with c3:
+                st.write("")
+                st.write("")
+                if st.button("Lưu vị trí Trực thăng", type="primary"):
+                    st.session_state.heli_pixel = (int(u_val), int(v_val))
+                    st.success(f"Đã lưu **HELI** = ({u_val}, {v_val})")
+                    st.rerun()
+        else:
+            st.markdown(f"##### Nhập tọa độ cho điểm **{current}**")
+            c1, c2, c3 = st.columns([1, 1, 1])
+            with c1:
+                default_u = st.session_state.points[current][0] if st.session_state.points[current] else w_orig // 2
+                u_val = st.number_input("u (ngang)", 0, w_orig-1, value=int(default_u), key=f"input_u_{current}")
+            with c2:
+                default_v = st.session_state.points[current][1] if st.session_state.points[current] else h_orig // 2
+                v_val = st.number_input("v (dọc)", 0, h_orig-1, value=int(default_v), key=f"input_v_{current}")
+            with c3:
+                st.write("")
+                st.write("")
+                if st.button(f"Lưu điểm {current}", type="primary"):
+                    st.session_state.points[current] = (int(u_val), int(v_val))
+                    st.success(f"Đã lưu **{current}** = ({u_val}, {v_val})")
+                    st.rerun()
 
-        st.markdown("##### Trạng thái 5 điểm:")
-        cols = st.columns(5)
+        st.markdown("##### Trạng thái:")
+        cols = st.columns(6)
         for i, name in enumerate(point_names):
             with cols[i]:
                 pt = st.session_state.points[name]
                 if pt:
                     st.success(f"**{name}**\n`{pt}`")
                 else:
-                    st.warning(f"**{name}**\nchưa chọn")
+                    st.warning(f"**{name}**\nchưa")
+        with cols[5]:
+            if st.session_state.heli_pixel:
+                st.success(f"**HELI**\n`{st.session_state.heli_pixel}`")
+            else:
+                st.warning("**HELI**\nchưa")
 
         if st.button("Xóa tất cả điểm"):
             st.session_state.points = {"O": None, "X": None, "Y": None, "Z": None, "B": None}
+            st.session_state.heli_pixel = None
             st.rerun()
 
-        # ---------- PHÁT HIỆN MÀU ----------
+        # ---------- PHÁT HIỆN & TÍNH TOÁN ----------
         all_set = all(st.session_state.points[p] is not None for p in point_names)
 
         if all_set:
@@ -230,12 +262,15 @@ with col_left:
 
             pts = st.session_state.points
             img = st.session_state.img_bgr
-
-            # Lấy danh sách điểm để loại trừ
             exclude = [pts[p] for p in ["O", "X", "Y", "Z", "B"] if pts[p] is not None]
 
+            # Nhà vẫn dùng auto màu cam
             pin_house = detect_color_centroid(img, "orange", exclude_pts=exclude, exclude_radius=25)
-            pin_heli  = detect_color_centroid(img, "red",   exclude_pts=exclude, exclude_radius=30)
+
+            # Trực thăng: ưu tiên điểm thủ công, nếu không có thì thử auto
+            pin_heli = st.session_state.heli_pixel
+            if pin_heli is None:
+                pin_heli = detect_color_centroid(img, "red", exclude_pts=exclude, exclude_radius=30)
 
             img_draw = img.copy()
             colors_bgr = {
@@ -244,7 +279,7 @@ with col_left:
             }
 
             if pin_house:
-                cv2.circle(img_draw, pin_house, 14, (0, 165, 255), 3)  # cam
+                cv2.circle(img_draw, pin_house, 14, (0, 165, 255), 3)
                 cv2.putText(img_draw, "nha", (pin_house[0]+12, pin_house[1]),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
             if pin_heli:
@@ -293,14 +328,14 @@ with col_left:
                         st.session_state.yz = auto_z
                         st.session_state.last_auto_heli = new_auto
                     st.session_state.wall_ok = True
-                    st.success(f"**Trực thăng (đỏ)** → **({auto_x}, 0, {auto_z})**")
+                    st.success(f"**Trực thăng** → **({auto_x}, 0, {auto_z})**")
                 else:
-                    st.warning("Không thấy trực thăng (đỏ)")
+                    st.warning("Chưa chọn vị trí trực thăng (chọn HELI ở trên)")
 
             except Exception as e:
                 st.error(f"Lỗi tính toán: {e}")
         else:
-            st.warning("Hãy chọn đủ 5 điểm trước.")
+            st.warning("Hãy chọn đủ 5 điểm O/X/Y/Z/B trước.")
 
 # ====================== CỘT PHẢI ======================
 with col_right:
@@ -319,7 +354,7 @@ with col_right:
     y_red = c2.number_input("Y", 0, MAX_Y, key="ry")
     z_red = c3.number_input("Z", 0, MAX_Z, key="rz")
 
-    st.markdown("**trực thăng** (đỏ)")
+    st.markdown("**trực thăng**")
     c1, c2, c3 = st.columns(3)
     x_yellow = c1.number_input("X", 0, MAX_X, key="yx")
     y_yellow = c2.number_input("Y", 0, MAX_Y, key="yy")
@@ -408,4 +443,4 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Đã tách rõ đỏ và cam · Trực thăng đỏ · Nhà cam · Chỉnh tay không bị reset · Đã loại trừ marker tham chiếu")
+st.caption("Nhà dùng màu cam (auto) · Trực thăng chọn thủ công (vì màu đỏ quá yếu trong ảnh)")
