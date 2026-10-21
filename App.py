@@ -27,7 +27,7 @@ for k, v in defaults.items():
 
 MAX_X, MAX_Y, MAX_Z = 10, 10, 10
 
-st.markdown("### hệ thống oxyz cứu trợ")
+st.markdown("### HỆ THỐNG OXYZ CỨU TRỢ")
 
 col_left, col_right = st.columns([1.15, 1])
 
