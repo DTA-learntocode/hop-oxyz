@@ -1,4 +1,3 @@
-```python
 import cv2
 import numpy as np
 import plotly.graph_objects as go
@@ -34,19 +33,19 @@ col_left, col_right = st.columns([1.15, 1])
 
 # ====================== HÀM TIỆN ÍCH ======================
 def detect_color_centroid(img, color="yellow"):
-    """nhà = vàng-cam | trực thăng = đỏ"""
+    """nhà = vàng-cam | trực thăng = đỏ (đã tách rõ để không đụng nhau)"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
     if color == "yellow":
-        # Vàng - cam
-        mask = cv2.inRange(hsv, np.array([5, 80, 80]), np.array([35, 255, 255]))
+        # Vàng - cam (tránh vùng đỏ)
+        mask = cv2.inRange(hsv, np.array([8, 90, 90]), np.array([32, 255, 255]))
         min_area = 300
     else:
-        # Đỏ
-        mask1 = cv2.inRange(hsv, np.array([0, 60, 60]), np.array([12, 255, 255]))
-        mask2 = cv2.inRange(hsv, np.array([165, 60, 60]), np.array([180, 255, 255]))
+        # Đỏ thật (tránh vùng cam)
+        mask1 = cv2.inRange(hsv, np.array([0, 100, 80]), np.array([7, 255, 255]))
+        mask2 = cv2.inRange(hsv, np.array([170, 100, 80]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
-        min_area = 120
+        min_area = 100
 
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
@@ -131,7 +130,7 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # Ảnh hiển thị (nét)
+        # Ảnh hiển thị
         max_display_width = 780
         scale = min(1.0, max_display_width / w_orig)
         disp_w = int(w_orig * scale)
@@ -390,7 +389,4 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Trực thăng = đỏ · Chỉnh tay không bị reset · Ước lượng từ vị trí bắt màu")
-```
-
-Code đã hoàn chỉnh, trực thăng phát hiện màu **đỏ**, chỉnh tay không bị reset.
+st.caption("Đã tách rõ đỏ và cam · Trực thăng đỏ · Nhà vàng-cam · Chỉnh tay không bị reset")
