@@ -33,17 +33,17 @@ col_left, col_right = st.columns([1.15, 1])
 
 # ====================== HÀM TIỆN ÍCH ======================
 def detect_color_centroid(img, color="yellow"):
-    """nhà = vàng-cam | trực thăng = đỏ (đã tách rõ để không đụng nhau)"""
+    """nhà = vàng-cam | trực thăng = đỏ"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
     if color == "yellow":
-        # Vàng - cam (tránh vùng đỏ)
-        mask = cv2.inRange(hsv, np.array([8, 90, 90]), np.array([32, 255, 255]))
-        min_area = 300
+        # Vàng-cam (siết saturation cao để tránh trắng)
+        mask = cv2.inRange(hsv, np.array([8, 130, 100]), np.array([32, 255, 255]))
+        min_area = 400
     else:
-        # Đỏ thật (tránh vùng cam)
-        mask1 = cv2.inRange(hsv, np.array([0, 100, 80]), np.array([7, 255, 255]))
-        mask2 = cv2.inRange(hsv, np.array([170, 100, 80]), np.array([180, 255, 255]))
+        # Đỏ
+        mask1 = cv2.inRange(hsv, np.array([0, 110, 90]), np.array([7, 255, 255]))
+        mask2 = cv2.inRange(hsv, np.array([170, 110, 90]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
         min_area = 100
 
@@ -63,7 +63,6 @@ def detect_color_centroid(img, color="yellow"):
     if M["m00"] == 0:
         return None
     return int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
-
 def compute_floor_homography(pts):
     src = np.float32([pts["O"], pts["X"], pts["Y"], pts["B"]])
     dst = np.float32([[0, 0], [MAX_X, 0], [0, MAX_Y], [MAX_X, MAX_Y]])
