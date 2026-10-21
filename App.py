@@ -81,8 +81,8 @@ with col_left:
     st.info(
         "**Cách chọn điểm:**\n"
         "1. Chọn điểm đang muốn gán (O → X → Y → Z → B)\n"
-        "2. Nhìn ảnh bên dưới, ước lượng tọa độ pixel (u, v)\n"
-        "3. Nhập vào ô số → điểm sẽ hiện ngay trên ảnh\n\n"
+        "2. Di chuột trên ảnh → sẽ hiện tọa độ **u, v**\n"
+        "3. Nhập số đó vào ô bên dưới rồi bấm **Lưu điểm**\n\n"
         "**nhà** = vàng · **trực thăng** = đỏ"
     )
 
@@ -97,7 +97,7 @@ with col_left:
         st.session_state.img_rgb = img_rgb
 
         h, w = img_rgb.shape[:2]
-        st.caption(f"Kích thước ảnh: **{w} × {h}** px  (u từ 0→{w-1}, v từ 0→{h-1})")
+        st.caption(f"Kích thước ảnh: **{w} × {h}** px  (u: 0→{w-1} | v: 0→{h-1})")
 
         st.markdown("---")
         st.subheader("2. Chọn 5 điểm tham chiếu")
@@ -120,45 +120,59 @@ with col_left:
         )
         st.session_state.current_point = current
 
+        # ----- Ảnh Plotly có hiện tọa độ khi hover -----
+        fig = go.Figure()
+        fig.add_trace(go.Image(z=img_rgb, hovertemplate="u: %{x:.0f}<br>v: %{y:.0f}<extra></extra>"))
+
+        # Vẽ các điểm đã chọn lên ảnh
+        colors = {
+            "O": "red", "X": "lime", "Y": "cyan", "Z": "magenta", "B": "yellow"
+        }
+        for name, pt in st.session_state.points.items():
+            if pt is not None:
+                fig.add_trace(go.Scatter(
+                    x=[pt[0]], y=[pt[1]],
+                    mode="markers+text",
+                    marker=dict(size=16, color=colors[name],
+                                line=dict(width=2, color="white")),
+                    text=[name],
+                    textposition="top center",
+                    textfont=dict(size=14, color="white"),
+                    hoverinfo="skip",
+                    showlegend=False
+                ))
+
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=30, b=0),
+            xaxis=dict(visible=False, range=[0, w]),
+            yaxis=dict(visible=False, range=[h, 0]),  # đảo y cho đúng ảnh
+            height=420,
+            dragmode=False,
+        )
+        fig.update_xaxes(showticklabels=False)
+        fig.update_yaxes(showticklabels=False)
+
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.caption("Di chuột trên ảnh để xem tọa độ u, v")
+
         # ----- Nhập tọa độ điểm hiện tại -----
-        st.markdown(f"##### Nhập tọa độ pixel cho điểm **{current}**")
+        st.markdown(f"##### Nhập tọa độ cho điểm **{current}**")
         c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
-            u_val = st.number_input("u (ngang)", 0, w-1, 
-                                    value=st.session_state.points[current][0] if st.session_state.points[current] else w//2,
-                                    key=f"input_u_{current}")
+            default_u = st.session_state.points[current][0] if st.session_state.points[current] else w // 2
+            u_val = st.number_input("u (ngang)", 0, w-1, value=default_u, key=f"input_u_{current}")
         with c2:
-            v_val = st.number_input("v (dọc)", 0, h-1,
-                                    value=st.session_state.points[current][1] if st.session_state.points[current] else h//2,
-                                    key=f"input_v_{current}")
+            default_v = st.session_state.points[current][1] if st.session_state.points[current] else h // 2
+            v_val = st.number_input("v (dọc)", 0, h-1, value=default_v, key=f"input_v_{current}")
         with c3:
-            st.write("")  # spacer
+            st.write("")
             st.write("")
             if st.button(f"Lưu điểm {current}", type="primary"):
                 st.session_state.points[current] = (int(u_val), int(v_val))
                 st.success(f"Đã lưu **{current}** = ({u_val}, {v_val})")
                 st.rerun()
 
-        # ----- Hiển thị ảnh + các điểm đã chọn -----
-        img_preview = img_bgr.copy()
-        colors_bgr = {
-            "O": (0, 0, 255),
-            "X": (0, 255, 0),
-            "Y": (255, 255, 0),
-            "Z": (255, 0, 255),
-            "B": (0, 255, 255),
-        }
-        for name, pt in st.session_state.points.items():
-            if pt is not None:
-                cv2.circle(img_preview, pt, 12, colors_bgr[name], -1)
-                cv2.circle(img_preview, pt, 14, (255, 255, 255), 2)
-                cv2.putText(img_preview, name, (pt[0] + 12, pt[1] - 8),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, colors_bgr[name], 2)
-
-        st.image(cv2.cvtColor(img_preview, cv2.COLOR_BGR2RGB), use_container_width=True,
-                 caption="Ảnh xem trước – các điểm đã chọn sẽ hiện ở đây")
-
-        # Danh sách điểm đã chọn
+        # Trạng thái 5 điểm
         st.markdown("##### Trạng thái 5 điểm:")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
@@ -187,6 +201,10 @@ with col_left:
             pin_heli  = detect_color_centroid(img, "red")
 
             img_draw = img.copy()
+            colors_bgr = {
+                "O": (0, 0, 255), "X": (0, 255, 0), "Y": (255, 255, 0),
+                "Z": (255, 0, 255), "B": (0, 255, 255)
+            }
             if pin_house:
                 cv2.circle(img_draw, pin_house, 14, (0, 255, 255), 3)
                 cv2.putText(img_draw, "nha", (pin_house[0]+12, pin_house[1]),
@@ -329,4 +347,4 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Không cần package thêm · Nhà vàng · Trực thăng đỏ")
+st.caption("Hover chuột trên ảnh để xem tọa độ u, v · Nhà vàng · Trực thăng đỏ")
