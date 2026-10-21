@@ -32,18 +32,18 @@ st.markdown("### hệ thống oxyz – ox = oy = oz = 10 (không dùng ArUco)")
 col_left, col_right = st.columns([1.15, 1])
 
 # ====================== HÀM TIỆN ÍCH ======================
-def detect_color_centroid(img, color="yellow"):
-    """nhà = vàng-cam | trực thăng = đỏ"""
+def detect_color_centroid(img, color="orange"):
+    """nhà = cam | trực thăng = đỏ (đã tách rõ để không đụng nhau)"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
-    if color == "yellow":
-        # Vàng-cam (siết saturation cao để tránh trắng)
-        mask = cv2.inRange(hsv, np.array([8, 130, 100]), np.array([32, 255, 255]))
-        min_area = 400
+    if color == "orange":
+        # Cam (tránh vùng vàng và đỏ)
+        mask = cv2.inRange(hsv, np.array([10, 100, 100]), np.array([25, 255, 255]))
+        min_area = 300
     else:
-        # Đỏ
-        mask1 = cv2.inRange(hsv, np.array([0, 110, 90]), np.array([7, 255, 255]))
-        mask2 = cv2.inRange(hsv, np.array([170, 110, 90]), np.array([180, 255, 255]))
+        # Đỏ thật (tránh vùng cam)
+        mask1 = cv2.inRange(hsv, np.array([0, 100, 80]), np.array([7, 255, 255]))
+        mask2 = cv2.inRange(hsv, np.array([170, 100, 80]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
         min_area = 100
 
@@ -63,6 +63,7 @@ def detect_color_centroid(img, color="yellow"):
     if M["m00"] == 0:
         return None
     return int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
+
 def compute_floor_homography(pts):
     src = np.float32([pts["O"], pts["X"], pts["Y"], pts["B"]])
     dst = np.float32([[0, 0], [MAX_X, 0], [0, MAX_Y], [MAX_X, MAX_Y]])
@@ -92,7 +93,7 @@ with col_left:
         "1. Chọn điểm đang muốn gán (O → X → Y → Z → B)\n"
         "2. Di chuột trên ảnh → hiện tọa độ **u, v**\n"
         "3. Nhập số vào ô rồi bấm **Lưu điểm**\n\n"
-        "**nhà** = vàng-cam · **trực thăng** = đỏ"
+        "**nhà** = cam · **trực thăng** = đỏ"
     )
 
     img_file = st.camera_input("Chụp ảnh mô hình", key="cam") or \
@@ -102,6 +103,7 @@ with col_left:
         file_bytes = np.frombuffer(img_file.getvalue(), np.uint8)
         img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
         st.session_state.img_bgr = img_bgr
         st.session_state.img_rgb = img_rgb
 
@@ -208,7 +210,6 @@ with col_left:
 
         # ---------- PHÁT HIỆN MÀU ----------
         all_set = all(st.session_state.points[p] is not None for p in point_names)
-
         if all_set:
             st.markdown("---")
             st.subheader("3. Kết quả phát hiện")
@@ -216,7 +217,7 @@ with col_left:
             pts = st.session_state.points
             img = st.session_state.img_bgr
 
-            pin_house = detect_color_centroid(img, "yellow")
+            pin_house = detect_color_centroid(img, "orange")
             pin_heli  = detect_color_centroid(img, "red")
 
             img_draw = img.copy()
@@ -224,10 +225,11 @@ with col_left:
                 "O": (0, 0, 255), "X": (0, 255, 0), "Y": (255, 255, 0),
                 "Z": (255, 0, 255), "B": (0, 255, 255)
             }
+
             if pin_house:
-                cv2.circle(img_draw, pin_house, 14, (0, 255, 255), 3)
+                cv2.circle(img_draw, pin_house, 14, (0, 165, 255), 3)  # cam
                 cv2.putText(img_draw, "nha", (pin_house[0]+12, pin_house[1]),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
             if pin_heli:
                 cv2.circle(img_draw, pin_heli, 14, (0, 0, 255), 3)
                 cv2.putText(img_draw, "truc thang", (pin_heli[0]+12, pin_heli[1]),
@@ -257,9 +259,9 @@ with col_left:
                         st.session_state.rz = 3
                         st.session_state.last_auto_house = new_auto
                     st.session_state.floor_ok = True
-                    st.success(f"**Nhà (vàng-cam)** → **({auto_x}, {auto_y}, 3)**")
+                    st.success(f"**Nhà (cam)** → **({auto_x}, {auto_y}, 3)**")
                 else:
-                    st.warning("Không thấy nhà (vàng-cam)")
+                    st.warning("Không thấy nhà (cam)")
 
                 if pin_heli:
                     xhe, zhe = apply_affine(M_wall, pin_heli)
@@ -294,7 +296,7 @@ with col_right:
     elif st.session_state.wall_ok:
         st.info("Đã có tọa độ trực thăng")
 
-    st.markdown("**nhà** (vàng-cam) — Z mặc định = 3")
+    st.markdown("**nhà** (cam) — Z mặc định = 3")
     c1, c2, c3 = st.columns(3)
     x_red = c1.number_input("X", 0, MAX_X, key="rx")
     y_red = c2.number_input("Y", 0, MAX_Y, key="ry")
@@ -330,7 +332,6 @@ with col_right:
 
     st.markdown("---")
     st.subheader("Kết quả tính toán chi tiết")
-
     st.write(f"**nhà:** `{list(P_red)}`")
     st.write(f"**trực thăng:** `{list(P_yellow)}`")
     st.warning(f"**Khoảng cách 3D:** `{distance:.2f}` đơn vị")
@@ -351,10 +352,11 @@ with col_right:
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
+
     fig3d = go.Figure()
     fig3d.add_trace(go.Scatter3d(
         x=[P_red[0]], y=[P_red[1]], z=[P_red[2]],
-        mode="markers+text", marker=dict(size=12, color="gold", symbol="diamond"),
+        mode="markers+text", marker=dict(size=12, color="orange", symbol="diamond"),
         text=["nhà"], name="nhà",
     ))
     fig3d.add_trace(go.Scatter3d(
@@ -376,6 +378,7 @@ with col_right:
         x=[P_yellow[0], P_red[0]], y=[P_yellow[1], P_red[1]], z=[P_yellow[2], P_red[2]],
         mode="lines", line=dict(color="orange", width=5, dash="dash"), name="khoảng cách",
     ))
+
     fig3d.update_layout(
         scene=dict(
             xaxis=dict(range=[0, MAX_X+1], title="Ox"),
@@ -388,4 +391,4 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Đã tách rõ đỏ và cam · Trực thăng đỏ · Nhà vàng-cam · Chỉnh tay không bị reset")
+st.caption("Đã tách rõ đỏ và cam · Trực thăng đỏ · Nhà cam · Chỉnh tay không bị reset")
