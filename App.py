@@ -1,3 +1,4 @@
+```python
 import cv2
 import numpy as np
 import plotly.graph_objects as go
@@ -18,6 +19,8 @@ defaults = {
     "current_point": "O",
     "img_rgb": None,
     "img_bgr": None,
+    "last_auto_house": None,
+    "last_auto_heli": None,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -39,11 +42,11 @@ def detect_color_centroid(img, color="yellow"):
         mask = cv2.inRange(hsv, np.array([5, 80, 80]), np.array([35, 255, 255]))
         min_area = 300
     else:
-        # Đỏ (nới rộng hơn để dễ bắt)
-        mask1 = cv2.inRange(hsv, np.array([0, 50, 50]), np.array([12, 255, 255]))
-        mask2 = cv2.inRange(hsv, np.array([165, 50, 50]), np.array([180, 255, 255]))
+        # Đỏ
+        mask1 = cv2.inRange(hsv, np.array([0, 60, 60]), np.array([12, 255, 255]))
+        mask2 = cv2.inRange(hsv, np.array([165, 60, 60]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
-        min_area = 150          # giảm ngưỡng cho trực thăng
+        min_area = 120
 
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
@@ -128,26 +131,23 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # ===== Làm ảnh nét hơn khi đưa vào Plotly =====
+        # Ảnh hiển thị (nét)
         max_display_width = 780
         scale = min(1.0, max_display_width / w_orig)
         disp_w = int(w_orig * scale)
         disp_h = int(h_orig * scale)
-
-        # Resize chất lượng cao
         img_display = cv2.resize(img_rgb, (disp_w, disp_h), interpolation=cv2.INTER_AREA)
 
         fig = go.Figure()
         fig.add_trace(go.Image(
             z=img_display,
-            hovertemplate="u (gốc): %{customdata[0]:.0f}<br>v (gốc): %{customdata[1]:.0f}<extra></extra>",
+            hovertemplate="u: %{customdata[0]:.0f}<br>v: %{customdata[1]:.0f}<extra></extra>",
             customdata=np.stack([
                 np.linspace(0, w_orig-1, disp_w).astype(int)[None, :].repeat(disp_h, axis=0),
                 np.linspace(0, h_orig-1, disp_h).astype(int)[:, None].repeat(disp_w, axis=1)
             ], axis=-1)
         ))
 
-        # Vẽ điểm đã chọn (quy về kích thước hiển thị)
         colors = {"O": "red", "X": "lime", "Y": "cyan", "Z": "magenta", "B": "yellow"}
         for name, pt in st.session_state.points.items():
             if pt is not None:
@@ -156,8 +156,7 @@ with col_left:
                 fig.add_trace(go.Scatter(
                     x=[x_disp], y=[y_disp],
                     mode="markers+text",
-                    marker=dict(size=18, color=colors[name],
-                                line=dict(width=2, color="white")),
+                    marker=dict(size=18, color=colors[name], line=dict(width=2, color="white")),
                     text=[name],
                     textposition="top center",
                     textfont=dict(size=15, color="white", family="Arial Black"),
@@ -171,16 +170,14 @@ with col_left:
             yaxis=dict(visible=False, range=[disp_h, 0]),
             height=460,
             dragmode=False,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
         )
         fig.update_xaxes(showticklabels=False)
         fig.update_yaxes(showticklabels=False)
 
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        st.caption("Di chuột trên ảnh để xem tọa độ **u, v gốc** (ảnh đã được làm nét)")
+        st.caption("Di chuột trên ảnh để xem tọa độ u, v")
 
-        # Nhập tọa độ
+        # Nhập tọa độ điểm
         st.markdown(f"##### Nhập tọa độ cho điểm **{current}**")
         c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
@@ -197,7 +194,6 @@ with col_left:
                 st.success(f"Đã lưu **{current}** = ({u_val}, {v_val})")
                 st.rerun()
 
-        # Trạng thái
         st.markdown("##### Trạng thái 5 điểm:")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
@@ -212,7 +208,7 @@ with col_left:
             st.session_state.points = {"O": None, "X": None, "Y": None, "Z": None, "B": None}
             st.rerun()
 
-        # ---------- TÍNH TỌA ĐỘ ----------
+        # ---------- PHÁT HIỆN MÀU ----------
         all_set = all(st.session_state.points[p] is not None for p in point_names)
 
         if all_set:
@@ -253,12 +249,15 @@ with col_left:
                 if pin_house:
                     xh, yh = apply_homography(H_floor, pin_house)
                     auto_x, auto_y = int(round(xh)), int(round(yh))
-                    st.session_state.x_red = auto_x
-                    st.session_state.y_red = auto_y
-                    st.session_state.z_red = 3
-                    st.session_state.rx = auto_x
-                    st.session_state.ry = auto_y
-                    st.session_state.rz = 3
+                    new_auto = (auto_x, auto_y, 3)
+                    if st.session_state.last_auto_house != new_auto:
+                        st.session_state.x_red = auto_x
+                        st.session_state.y_red = auto_y
+                        st.session_state.z_red = 3
+                        st.session_state.rx = auto_x
+                        st.session_state.ry = auto_y
+                        st.session_state.rz = 3
+                        st.session_state.last_auto_house = new_auto
                     st.session_state.floor_ok = True
                     st.success(f"**Nhà (vàng-cam)** → **({auto_x}, {auto_y}, 3)**")
                 else:
@@ -267,12 +266,15 @@ with col_left:
                 if pin_heli:
                     xhe, zhe = apply_affine(M_wall, pin_heli)
                     auto_x, auto_z = int(round(xhe)), int(round(zhe))
-                    st.session_state.x_yellow = auto_x
-                    st.session_state.y_yellow = 0
-                    st.session_state.z_yellow = auto_z
-                    st.session_state.yx = auto_x
-                    st.session_state.yy = 0
-                    st.session_state.yz = auto_z
+                    new_auto = (auto_x, 0, auto_z)
+                    if st.session_state.last_auto_heli != new_auto:
+                        st.session_state.x_yellow = auto_x
+                        st.session_state.y_yellow = 0
+                        st.session_state.z_yellow = auto_z
+                        st.session_state.yx = auto_x
+                        st.session_state.yy = 0
+                        st.session_state.yz = auto_z
+                        st.session_state.last_auto_heli = new_auto
                     st.session_state.wall_ok = True
                     st.success(f"**Trực thăng (đỏ)** → **({auto_x}, 0, {auto_z})**")
                 else:
@@ -285,7 +287,7 @@ with col_left:
 
 # ====================== CỘT PHẢI ======================
 with col_right:
-    st.subheader("Tọa độ hiện tại")
+    st.subheader("Tọa độ hiện tại (có thể chỉnh tay)")
 
     if st.session_state.floor_ok and st.session_state.wall_ok:
         st.success("Đã có đủ tọa độ cả 2 vật")
@@ -305,13 +307,6 @@ with col_right:
     x_yellow = c1.number_input("X", 0, MAX_X, key="yx")
     y_yellow = c2.number_input("Y", 0, MAX_Y, key="yy")
     z_yellow = c3.number_input("Z", 0, MAX_Z, key="yz")
-
-    st.session_state.x_red = x_red
-    st.session_state.y_red = y_red
-    st.session_state.z_red = z_red
-    st.session_state.x_yellow = x_yellow
-    st.session_state.y_yellow = y_yellow
-    st.session_state.z_yellow = z_yellow
 
     P_red = np.array([x_red, y_red, z_red], dtype=float)
     P_yellow = np.array([x_yellow, y_yellow, z_yellow], dtype=float)
@@ -351,11 +346,10 @@ with col_right:
     
     with st.expander("Chi tiết tính toán thả khi bay"):
         st.write(f"- Chiều cao rơi: **{h_meters:.1f} m** (Z = {P_yellow[2]} × 1000)")
-        st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**  \n  `t = √(2h/g) = √(2 × {h_meters:.1f} / 9.8)`")
+        st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**")
         st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
         st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**")
         st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} đơn vị**")
-        st.write(f"- Điểm thả được tính bằng cách lùi từ nhà về phía trực thăng một đoạn `{min(d_ngang_donvi, norm):.2f}` đơn vị")
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
@@ -396,4 +390,7 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Ảnh chọn điểm đã được làm nét · Nhà vàng-cam · Trực thăng đỏ")
+st.caption("Trực thăng = đỏ · Chỉnh tay không bị reset · Ước lượng từ vị trí bắt màu")
+```
+
+Code đã hoàn chỉnh, trực thăng phát hiện màu **đỏ**, chỉnh tay không bị reset.
