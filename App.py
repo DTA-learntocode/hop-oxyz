@@ -2,8 +2,6 @@ import cv2
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
-from streamlit_drawable_canvas import st_canvas
-from PIL import Image
 
 st.set_page_config(
     page_title="Hộp Oxyz - Chọn 5 điểm",
@@ -81,8 +79,10 @@ def apply_affine(M, pin):
 with col_left:
     st.subheader("1. Chụp / tải ảnh mô hình")
     st.info(
-        "**Chọn 5 điểm theo thứ tự:**\n"
-        "- **O** (0,0,0) → **X** (10,0,0) → **Y** (0,10,0) → **Z** (0,0,10) → **B** (10,10,0)\n\n"
+        "**Cách chọn điểm:**\n"
+        "1. Chọn điểm đang muốn gán (O → X → Y → Z → B)\n"
+        "2. Nhìn ảnh bên dưới, ước lượng tọa độ pixel (u, v)\n"
+        "3. Nhập vào ô số → điểm sẽ hiện ngay trên ảnh\n\n"
         "**nhà** = vàng · **trực thăng** = đỏ"
     )
 
@@ -97,10 +97,10 @@ with col_left:
         st.session_state.img_rgb = img_rgb
 
         h, w = img_rgb.shape[:2]
-        st.caption(f"Kích thước ảnh gốc: {w} × {h} px")
+        st.caption(f"Kích thước ảnh: **{w} × {h}** px  (u từ 0→{w-1}, v từ 0→{h-1})")
 
         st.markdown("---")
-        st.subheader("2. Chọn 5 điểm (click trực tiếp trên ảnh)")
+        st.subheader("2. Chọn 5 điểm tham chiếu")
 
         point_names = ["O", "X", "Y", "Z", "B"]
         labels = {
@@ -120,59 +120,54 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # ---- CANVAS để click điểm ----
-        # Resize ảnh cho canvas vừa màn hình (giữ tỉ lệ)
-        max_canvas_width = 700
-        scale = min(1.0, max_canvas_width / w)
-        canvas_w = int(w * scale)
-        canvas_h = int(h * scale)
+        # ----- Nhập tọa độ điểm hiện tại -----
+        st.markdown(f"##### Nhập tọa độ pixel cho điểm **{current}**")
+        c1, c2, c3 = st.columns([1, 1, 1])
+        with c1:
+            u_val = st.number_input("u (ngang)", 0, w-1, 
+                                    value=st.session_state.points[current][0] if st.session_state.points[current] else w//2,
+                                    key=f"input_u_{current}")
+        with c2:
+            v_val = st.number_input("v (dọc)", 0, h-1,
+                                    value=st.session_state.points[current][1] if st.session_state.points[current] else h//2,
+                                    key=f"input_v_{current}")
+        with c3:
+            st.write("")  # spacer
+            st.write("")
+            if st.button(f"Lưu điểm {current}", type="primary"):
+                st.session_state.points[current] = (int(u_val), int(v_val))
+                st.success(f"Đã lưu **{current}** = ({u_val}, {v_val})")
+                st.rerun()
 
-        bg_image = Image.fromarray(img_rgb).resize((canvas_w, canvas_h))
+        # ----- Hiển thị ảnh + các điểm đã chọn -----
+        img_preview = img_bgr.copy()
+        colors_bgr = {
+            "O": (0, 0, 255),
+            "X": (0, 255, 0),
+            "Y": (255, 255, 0),
+            "Z": (255, 0, 255),
+            "B": (0, 255, 255),
+        }
+        for name, pt in st.session_state.points.items():
+            if pt is not None:
+                cv2.circle(img_preview, pt, 12, colors_bgr[name], -1)
+                cv2.circle(img_preview, pt, 14, (255, 255, 255), 2)
+                cv2.putText(img_preview, name, (pt[0] + 12, pt[1] - 8),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, colors_bgr[name], 2)
 
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 0, 0, 0.3)",
-            stroke_width=2,
-            stroke_color="#FF0000",
-            background_image=bg_image,
-            update_streamlit=True,
-            height=canvas_h,
-            width=canvas_w,
-            drawing_mode="point",          # chỉ click điểm
-            point_display_radius=8,
-            key="canvas_points",
-            display_toolbar=True,
-        )
+        st.image(cv2.cvtColor(img_preview, cv2.COLOR_BGR2RGB), use_container_width=True,
+                 caption="Ảnh xem trước – các điểm đã chọn sẽ hiện ở đây")
 
-        # Lấy điểm vừa click
-        if canvas_result.json_data is not None:
-            objects = canvas_result.json_data.get("objects", [])
-            if objects:
-                # Lấy điểm cuối cùng được vẽ
-                last = objects[-1]
-                if last["type"] == "circle":   # point mode tạo circle
-                    # tọa độ trên canvas → chuyển về ảnh gốc
-                    cx = last["left"] + last.get("radius", 0)
-                    cy = last["top"] + last.get("radius", 0)
-                    u = int(round(cx / scale))
-                    v = int(round(cy / scale))
-                    # giới hạn trong ảnh
-                    u = max(0, min(w-1, u))
-                    v = max(0, min(h-1, v))
-
-                    cur = st.session_state.current_point
-                    st.session_state.points[cur] = (u, v)
-                    st.success(f"Đã chọn **{cur}** tại pixel ({u}, {v})")
-
-        # Hiển thị các điểm đã chọn
-        st.markdown("##### Điểm đã chọn:")
+        # Danh sách điểm đã chọn
+        st.markdown("##### Trạng thái 5 điểm:")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
             with cols[i]:
                 pt = st.session_state.points[name]
                 if pt:
-                    st.markdown(f"**{name}**: `{pt}`")
+                    st.success(f"**{name}**\n`{pt}`")
                 else:
-                    st.markdown(f"**{name}**: _chưa chọn_")
+                    st.warning(f"**{name}**\nchưa chọn")
 
         if st.button("Xóa tất cả điểm"):
             st.session_state.points = {"O": None, "X": None, "Y": None, "Z": None, "B": None}
@@ -202,11 +197,9 @@ with col_left:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
             for name, pt in pts.items():
-                color = {"O": (0,0,255), "X": (0,255,0), "Y": (255,255,0),
-                         "Z": (255,0,255), "B": (0,255,255)}[name]
-                cv2.circle(img_draw, pt, 10, color, -1)
+                cv2.circle(img_draw, pt, 10, colors_bgr[name], -1)
                 cv2.putText(img_draw, name, (pt[0]+8, pt[1]-8),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, colors_bgr[name], 2)
 
             st.image(cv2.cvtColor(img_draw, cv2.COLOR_BGR2RGB), use_container_width=True)
 
@@ -245,7 +238,7 @@ with col_left:
             except Exception as e:
                 st.error(f"Lỗi tính toán: {e}")
         else:
-            st.warning("Hãy chọn đủ 5 điểm.")
+            st.warning("Hãy chọn đủ 5 điểm trước.")
 
 # ====================== CỘT PHẢI ======================
 with col_right:
@@ -336,4 +329,4 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Dùng streamlit-drawable-canvas · Nhà vàng · Trực thăng đỏ")
+st.caption("Không cần package thêm · Nhà vàng · Trực thăng đỏ")
