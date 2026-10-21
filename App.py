@@ -11,7 +11,7 @@ st.set_page_config(
 # ====================== SESSION STATE ======================
 defaults = {
     "x_red": 3, "y_red": 2, "z_red": 3,          # nhà (vàng)
-    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,  # trực thăng (đỏ) - giữ tên biến cũ
+    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,  # trực thăng (đỏ)
     "floor_ok": False,
     "wall_ok": False,
     "points": {"O": None, "X": None, "Y": None, "Z": None, "B": None},
@@ -27,7 +27,7 @@ MAX_X, MAX_Y, MAX_Z = 10, 10, 10
 
 st.markdown("### hệ thống oxyz – ox = oy = oz = 10 (không dùng ArUco)")
 
-col_left, col_right = st.columns([1, 1.2])
+col_left, col_right = st.columns([1.1, 1])
 
 # ====================== HÀM TIỆN ÍCH ======================
 def detect_color_centroid(img, color="yellow"):
@@ -36,7 +36,7 @@ def detect_color_centroid(img, color="yellow"):
     
     if color == "yellow":
         mask = cv2.inRange(hsv, np.array([15, 70, 70]), np.array([40, 255, 255]))
-    else:  # red (xử lý cả 2 khoảng vì đỏ bị wrap quanh 0)
+    else:  # red
         mask1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
         mask2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
@@ -57,34 +57,27 @@ def detect_color_centroid(img, color="yellow"):
     return int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
 
 def compute_floor_homography(pts):
-    """Homography sàn Oxy dùng 4 điểm O, X, Y, B"""
     src = np.float32([pts["O"], pts["X"], pts["Y"], pts["B"]])
     dst = np.float32([[0, 0], [MAX_X, 0], [0, MAX_Y], [MAX_X, MAX_Y]])
-    H, status = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
+    H, _ = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
     return H
 
 def compute_wall_affine(pts):
-    """Affine tường Oxz dùng 3 điểm O, X, Z"""
     src = np.float32([pts["O"], pts["X"], pts["Z"]])
     dst = np.float32([[0, 0], [MAX_X, 0], [0, MAX_Z]])
-    M = cv2.getAffineTransform(src, dst)
-    return M
+    return cv2.getAffineTransform(src, dst)
 
 def apply_homography(H, pin):
     pt = np.array([[[pin[0], pin[1]]]], dtype=np.float32)
     out = cv2.perspectiveTransform(pt, H)[0][0]
-    x = float(np.clip(out[0], 0, MAX_X))
-    y = float(np.clip(out[1], 0, MAX_Y))
-    return x, y
+    return float(np.clip(out[0], 0, MAX_X)), float(np.clip(out[1], 0, MAX_Y))
 
 def apply_affine(M, pin):
     pt = np.array([[[pin[0], pin[1]]]], dtype=np.float32)
     out = cv2.transform(pt, M)[0][0]
-    x = float(np.clip(out[0], 0, MAX_X))
-    z = float(np.clip(out[1], 0, MAX_Z))
-    return x, z
+    return float(np.clip(out[0], 0, MAX_X)), float(np.clip(out[1], 0, MAX_Z))
 
-# ====================== GIAO DIỆN BÊN TRÁI ======================
+# ====================== CỘT TRÁI: ẢNH + CHỌN ĐIỂM ======================
 with col_left:
     st.subheader("1. Chụp / tải ảnh mô hình")
     st.info(
@@ -110,7 +103,6 @@ with col_left:
         h, w = img_rgb.shape[:2]
         st.caption(f"Kích thước ảnh: {w} × {h} px")
 
-        # ---------- CHỌN 5 ĐIỂM ----------
         st.markdown("---")
         st.subheader("2. Chọn 5 điểm tham chiếu")
 
@@ -131,55 +123,47 @@ with col_left:
             key="radio_point"
         )
 
-        # Hiển thị ảnh + điểm đã chọn (dấu rõ ràng)
+        # Ảnh + điểm đã chọn
         fig = go.Figure()
         fig.add_trace(go.Image(z=img_rgb))
 
-        # Màu và ký hiệu rõ cho từng điểm đã chọn
         point_style = {
-            "O": dict(color="red",     symbol="circle", size=18),
-            "X": dict(color="lime",    symbol="circle", size=18),
-            "Y": dict(color="cyan",    symbol="circle", size=18),
-            "Z": dict(color="magenta", symbol="circle", size=18),
-            "B": dict(color="yellow",  symbol="circle", size=18),
+            "O": dict(color="red",     size=18),
+            "X": dict(color="lime",    size=18),
+            "Y": dict(color="cyan",    size=18),
+            "Z": dict(color="magenta", size=18),
+            "B": dict(color="yellow",  size=18),
         }
 
         for name, pt in st.session_state.points.items():
             if pt is not None:
                 style = point_style[name]
-                # Vòng ngoài lớn (dấu đã chọn)
+                # Vòng ngoài lớn
                 fig.add_trace(go.Scatter(
                     x=[pt[0]], y=[pt[1]],
                     mode="markers",
-                    marker=dict(size=28, color=style["color"], opacity=0.35,
-                                symbol="circle"),
-                    hoverinfo="skip",
-                    showlegend=False
+                    marker=dict(size=28, color=style["color"], opacity=0.35, symbol="circle"),
+                    hoverinfo="skip", showlegend=False
                 ))
                 # Điểm chính + chữ
                 fig.add_trace(go.Scatter(
                     x=[pt[0]], y=[pt[1]],
                     mode="markers+text",
-                    marker=dict(size=style["size"], color=style["color"],
-                                symbol=style["symbol"],
+                    marker=dict(size=style["size"], color=style["color"], symbol="circle",
                                 line=dict(width=3, color="white")),
                     text=[name],
                     textposition="top center",
                     textfont=dict(size=16, color="white", family="Arial Black"),
-                    name=name,
                     showlegend=False
                 ))
 
         fig.update_layout(
-            width=min(700, w),
-            height=min(500, int(h * 700 / w)),
-            margin=dict(l=0, r=0, t=30, b=0),
+            margin=dict(l=0, r=0, t=20, b=0),
             xaxis=dict(visible=False, range=[0, w]),
             yaxis=dict(visible=False, range=[h, 0]),
             dragmode="pan",
+            height=420,
         )
-        fig.update_xaxes(showticklabels=False)
-        fig.update_yaxes(showticklabels=False)
 
         selected = st.plotly_chart(
             fig,
@@ -189,7 +173,6 @@ with col_left:
             key="point_selector"
         )
 
-        # Xử lý click
         if selected and selected.selection and selected.selection.get("points"):
             pt_data = selected.selection["points"][0]
             u = int(round(pt_data["x"]))
@@ -199,8 +182,8 @@ with col_left:
             st.success(f"Đã chọn điểm **{cur}** tại ({u}, {v})")
             st.rerun()
 
-        # Chỉnh thủ công tọa độ pixel
-        st.markdown("##### Tọa độ pixel hiện tại (có thể sửa thủ công)")
+        # Tọa độ pixel (chỉnh tay)
+        st.markdown("##### Tọa độ pixel (có thể sửa)")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
             with cols[i]:
@@ -215,22 +198,19 @@ with col_left:
             st.session_state.points = {"O": None, "X": None, "Y": None, "Z": None, "B": None}
             st.rerun()
 
-        # ---------- PHÁT HIỆN MÀU + TÍNH TỌA ĐỘ ----------
+        # Kết quả phát hiện màu
         all_set = all(st.session_state.points[p] is not None for p in point_names)
-
         if all_set:
             st.markdown("---")
-            st.subheader("3. Kết quả tự động")
+            st.subheader("3. Kết quả phát hiện")
 
             pts = st.session_state.points
             img = st.session_state.img_bgr
 
-            # Phát hiện nhà (vàng) và trực thăng (đỏ)
             pin_house = detect_color_centroid(img, "yellow")
             pin_heli  = detect_color_centroid(img, "red")
 
             img_draw = img.copy()
-
             if pin_house is not None:
                 cv2.circle(img_draw, pin_house, 14, (0, 255, 255), 3)
                 cv2.putText(img_draw, "nha", (pin_house[0]+12, pin_house[1]),
@@ -240,7 +220,6 @@ with col_left:
                 cv2.putText(img_draw, "truc thang", (pin_heli[0]+12, pin_heli[1]),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
-            # Vẽ 5 điểm tham chiếu
             for name, pt in pts.items():
                 color = {"O": (0,0,255), "X": (0,255,0), "Y": (255,255,0),
                          "Z": (255,0,255), "B": (0,255,255)}[name]
@@ -256,8 +235,7 @@ with col_left:
 
                 if pin_house is not None:
                     xh, yh = apply_homography(H_floor, pin_house)
-                    auto_x = int(round(xh))
-                    auto_y = int(round(yh))
+                    auto_x, auto_y = int(round(xh)), int(round(yh))
                     st.session_state.x_red = auto_x
                     st.session_state.y_red = auto_y
                     st.session_state.z_red = 3
@@ -265,14 +243,13 @@ with col_left:
                     st.session_state.ry = auto_y
                     st.session_state.rz = 3
                     st.session_state.floor_ok = True
-                    st.success(f"**Nhà (vàng):** X≈{xh:.2f}, Y≈{yh:.2f} → **({auto_x}, {auto_y}, 3)**")
+                    st.success(f"**Nhà (vàng):** → **({auto_x}, {auto_y}, 3)**")
                 else:
                     st.warning("Không thấy nhà (màu vàng)")
 
                 if pin_heli is not None:
                     xhe, zhe = apply_affine(M_wall, pin_heli)
-                    auto_x = int(round(xhe))
-                    auto_z = int(round(zhe))
+                    auto_x, auto_z = int(round(xhe)), int(round(zhe))
                     st.session_state.x_yellow = auto_x
                     st.session_state.y_yellow = 0
                     st.session_state.z_yellow = auto_z
@@ -280,22 +257,21 @@ with col_left:
                     st.session_state.yy = 0
                     st.session_state.yz = auto_z
                     st.session_state.wall_ok = True
-                    st.success(f"**Trực thăng (đỏ):** X≈{xhe:.2f}, Z≈{zhe:.2f} → **({auto_x}, 0, {auto_z})**")
+                    st.success(f"**Trực thăng (đỏ):** → **({auto_x}, 0, {auto_z})**")
                 else:
                     st.warning("Không thấy trực thăng (màu đỏ)")
 
             except Exception as e:
                 st.error(f"Lỗi tính toán: {e}")
-
         else:
             st.warning("Hãy chọn đủ 5 điểm trước khi tính tọa độ.")
 
-    # ---------- HIỆU CHỈNH THỦ CÔNG ----------
-    st.markdown("---")
-    st.markdown("#### Tọa độ hiện tại (có thể chỉnh tay)")
+# ====================== CỘT PHẢI: TỌA ĐỘ + 3D ======================
+with col_right:
+    st.subheader("Tọa độ hiện tại")
 
     if st.session_state.floor_ok and st.session_state.wall_ok:
-        st.success("Đã có đủ tọa độ cả 2 vật → sẵn sàng tính toán")
+        st.success("Đã có đủ tọa độ cả 2 vật")
     elif st.session_state.floor_ok:
         st.info("Đã có tọa độ nhà (sàn)")
     elif st.session_state.wall_ok:
@@ -303,15 +279,15 @@ with col_left:
 
     st.markdown("**nhà** (vàng) — Z mặc định = 3")
     c1, c2, c3 = st.columns(3)
-    x_red = c1.number_input("X (0-10)", 0, MAX_X, key="rx")
-    y_red = c2.number_input("Y (0-10)", 0, MAX_Y, key="ry")
-    z_red = c3.number_input("Z (0-10)", 0, MAX_Z, key="rz")
+    x_red = c1.number_input("X", 0, MAX_X, key="rx")
+    y_red = c2.number_input("Y", 0, MAX_Y, key="ry")
+    z_red = c3.number_input("Z", 0, MAX_Z, key="rz")
 
     st.markdown("**trực thăng** (đỏ)")
     c1, c2, c3 = st.columns(3)
-    x_yellow = c1.number_input("X (0-10)", 0, MAX_X, key="yx")
-    y_yellow = c2.number_input("Y (0-10)", 0, MAX_Y, key="yy")
-    z_yellow = c3.number_input("Z (0-10)", 0, MAX_Z, key="yz")
+    x_yellow = c1.number_input("X", 0, MAX_X, key="yx")
+    y_yellow = c2.number_input("Y", 0, MAX_Y, key="yy")
+    z_yellow = c3.number_input("Z", 0, MAX_Z, key="yz")
 
     st.session_state.x_red = x_red
     st.session_state.y_red = y_red
@@ -345,38 +321,38 @@ with col_left:
     st.success(f"Thả thẳng đứng: `{list(P_drop)}`")
     st.info(f"Thả khi bay: `({P_release[0]:.2f}, {P_release[1]:.2f}, {P_release[2]})`")
 
-# ====================== CỘT PHẢI ======================
-with col_right:
+    st.markdown("---")
     st.subheader("Mô hình 3D")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter3d(
+    fig3d = go.Figure()
+    fig3d.add_trace(go.Scatter3d(
         x=[P_red[0]], y=[P_red[1]], z=[P_red[2]],
         mode="markers+text", marker=dict(size=12, color="gold", symbol="diamond"),
         text=["nhà"], name="nhà",
     ))
-    fig.add_trace(go.Scatter3d(
+    fig3d.add_trace(go.Scatter3d(
         x=[P_yellow[0]], y=[P_yellow[1]], z=[P_yellow[2]],
         mode="markers+text", marker=dict(size=12, color="red", symbol="square"),
         text=["trực thăng"], name="trực thăng",
     ))
-    fig.add_trace(go.Scatter3d(
+    fig3d.add_trace(go.Scatter3d(
         x=[P_release[0]], y=[P_release[1]], z=[P_release[2]],
         mode="markers+text", marker=dict(size=10, color="purple", symbol="cross"),
         text=["điểm thả"], name="điểm thả",
     ))
-    fig.add_trace(go.Scatter3d(
+    fig3d.add_trace(go.Scatter3d(
         x=[P_yellow[0], P_red[0]], y=[P_yellow[1], P_red[1]], z=[P_yellow[2], P_red[2]],
         mode="lines", line=dict(color="orange", width=5, dash="dash"), name="khoảng cách",
     ))
-    fig.update_layout(
+    fig3d.update_layout(
         scene=dict(
-            xaxis=dict(range=[0, MAX_X + 1], title=f"Ox (0→{MAX_X})"),
-            yaxis=dict(range=[0, MAX_Y + 1], title=f"Oy (0→{MAX_Y})"),
-            zaxis=dict(range=[0, MAX_Z + 1], title=f"Oz (0→{MAX_Z})"),
+            xaxis=dict(range=[0, MAX_X + 1], title="Ox"),
+            yaxis=dict(range=[0, MAX_Y + 1], title="Oy"),
+            zaxis=dict(range=[0, MAX_Z + 1], title="Oz"),
             camera=dict(eye=dict(x=1.6, y=-1.6, z=1.3)),
         ),
-        margin=dict(l=0, r=0, b=0, t=30),
+        margin=dict(l=0, r=0, b=0, t=20),
+        height=380,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Không dùng ArUco · Chọn 5 điểm thủ công · Nhà vàng · Trực thăng đỏ")
+st.caption("Không dùng ArUco · Chọn 5 điểm · Nhà vàng · Trực thăng đỏ")
