@@ -10,8 +10,8 @@ st.set_page_config(
 
 # ====================== SESSION STATE ======================
 defaults = {
-    "x_red": 3, "y_red": 2, "z_red": 3,          # nhà (vàng-cam)
-    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,  # trực thăng (đỏ)
+    "x_red": 3, "y_red": 2, "z_red": 3,
+    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,
     "floor_ok": False,
     "wall_ok": False,
     "points": {"O": None, "X": None, "Y": None, "Z": None, "B": None},
@@ -35,7 +35,6 @@ def detect_color_centroid(img, color="yellow"):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
     if color == "yellow":
-        # Range rộng cho màu cam - vàng của nhà
         mask = cv2.inRange(hsv, np.array([5, 80, 80]), np.array([35, 255, 255]))
     else:  # red
         mask1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
@@ -51,7 +50,7 @@ def detect_color_centroid(img, color="yellow"):
         return None
     
     largest = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(largest) < 300:          # bỏ qua vật quá nhỏ
+    if cv2.contourArea(largest) < 300:
         return None
     
     M = cv2.moments(largest)
@@ -101,8 +100,8 @@ with col_left:
         st.session_state.img_bgr = img_bgr
         st.session_state.img_rgb = img_rgb
 
-        h, w = img_rgb.shape[:2]
-        st.caption(f"Kích thước ảnh: **{w} × {h}** px  (u: 0→{w-1} | v: 0→{h-1})")
+        h_orig, w_orig = img_rgb.shape[:2]
+        st.caption(f"Kích thước ảnh gốc: **{w_orig} × {h_orig}** px")
 
         st.markdown("---")
         st.subheader("2. Chọn 5 điểm tham chiếu")
@@ -125,49 +124,67 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # Ảnh Plotly có hiện tọa độ khi hover
-        fig = go.Figure()
-        fig.add_trace(go.Image(z=img_rgb, hovertemplate="u: %{x:.0f}<br>v: %{y:.0f}<extra></extra>"))
+        # ===== Làm ảnh nét hơn khi đưa vào Plotly =====
+        max_display_width = 780
+        scale = min(1.0, max_display_width / w_orig)
+        disp_w = int(w_orig * scale)
+        disp_h = int(h_orig * scale)
 
-        colors = {
-            "O": "red", "X": "lime", "Y": "cyan", "Z": "magenta", "B": "yellow"
-        }
+        # Resize chất lượng cao
+        img_display = cv2.resize(img_rgb, (disp_w, disp_h), interpolation=cv2.INTER_AREA)
+
+        fig = go.Figure()
+        fig.add_trace(go.Image(
+            z=img_display,
+            hovertemplate="u (gốc): %{customdata[0]:.0f}<br>v (gốc): %{customdata[1]:.0f}<extra></extra>",
+            customdata=np.stack([
+                np.linspace(0, w_orig-1, disp_w).astype(int)[None, :].repeat(disp_h, axis=0),
+                np.linspace(0, h_orig-1, disp_h).astype(int)[:, None].repeat(disp_w, axis=1)
+            ], axis=-1)
+        ))
+
+        # Vẽ điểm đã chọn (quy về kích thước hiển thị)
+        colors = {"O": "red", "X": "lime", "Y": "cyan", "Z": "magenta", "B": "yellow"}
         for name, pt in st.session_state.points.items():
             if pt is not None:
+                x_disp = pt[0] * scale
+                y_disp = pt[1] * scale
                 fig.add_trace(go.Scatter(
-                    x=[pt[0]], y=[pt[1]],
+                    x=[x_disp], y=[y_disp],
                     mode="markers+text",
-                    marker=dict(size=16, color=colors[name],
+                    marker=dict(size=18, color=colors[name],
                                 line=dict(width=2, color="white")),
                     text=[name],
                     textposition="top center",
-                    textfont=dict(size=14, color="white"),
+                    textfont=dict(size=15, color="white", family="Arial Black"),
                     hoverinfo="skip",
                     showlegend=False
                 ))
 
         fig.update_layout(
-            margin=dict(l=0, r=0, t=30, b=0),
-            xaxis=dict(visible=False, range=[0, w]),
-            yaxis=dict(visible=False, range=[h, 0]),
-            height=420,
+            margin=dict(l=0, r=0, t=20, b=0),
+            xaxis=dict(visible=False, range=[0, disp_w]),
+            yaxis=dict(visible=False, range=[disp_h, 0]),
+            height=460,
             dragmode=False,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
         )
         fig.update_xaxes(showticklabels=False)
         fig.update_yaxes(showticklabels=False)
 
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        st.caption("Di chuột trên ảnh để xem tọa độ u, v")
+        st.caption("Di chuột trên ảnh để xem tọa độ **u, v gốc** (ảnh đã được làm nét)")
 
-        # Nhập tọa độ điểm hiện tại
+        # Nhập tọa độ
         st.markdown(f"##### Nhập tọa độ cho điểm **{current}**")
         c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
-            default_u = st.session_state.points[current][0] if st.session_state.points[current] else w // 2
-            u_val = st.number_input("u (ngang)", 0, w-1, value=default_u, key=f"input_u_{current}")
+            default_u = st.session_state.points[current][0] if st.session_state.points[current] else w_orig // 2
+            u_val = st.number_input("u (ngang)", 0, w_orig-1, value=int(default_u), key=f"input_u_{current}")
         with c2:
-            default_v = st.session_state.points[current][1] if st.session_state.points[current] else h // 2
-            v_val = st.number_input("v (dọc)", 0, h-1, value=default_v, key=f"input_v_{current}")
+            default_v = st.session_state.points[current][1] if st.session_state.points[current] else h_orig // 2
+            v_val = st.number_input("v (dọc)", 0, h_orig-1, value=int(default_v), key=f"input_v_{current}")
         with c3:
             st.write("")
             st.write("")
@@ -176,7 +193,7 @@ with col_left:
                 st.success(f"Đã lưu **{current}** = ({u_val}, {v_val})")
                 st.rerun()
 
-        # Trạng thái 5 điểm
+        # Trạng thái
         st.markdown("##### Trạng thái 5 điểm:")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
@@ -295,25 +312,19 @@ with col_right:
     P_red = np.array([x_red, y_red, z_red], dtype=float)
     P_yellow = np.array([x_yellow, y_yellow, z_yellow], dtype=float)
 
-    # ========== TÍNH TOÁN CHI TIẾT (giống bản gốc) ==========
+    # ========== TÍNH TOÁN CHI TIẾT ==========
     distance = np.linalg.norm(P_red - P_yellow)
-    
-    # Điểm thả thẳng đứng (cùng X,Y với nhà, cùng Z với trực thăng)
     P_drop = np.array([P_red[0], P_red[1], P_yellow[2]])
     
-    # Tính thời gian rơi và khoảng cách ngang
-    # Giả sử 1 đơn vị = 1000 m, vận tốc bay ngang = 5 m/s
     h_meters = P_yellow[2] * 1000.0
     t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
-    d_ngang_km = (5.0 * t_fall) / 1000.0          # quãng đường ngang (km)
-    d_ngang_donvi = d_ngang_km                    # vì 1 đơn vị = 1 km trong giả định này
+    d_ngang_km = (5.0 * t_fall) / 1000.0
+    d_ngang_donvi = d_ngang_km
 
-    # Vector hướng từ trực thăng đến nhà (trên mặt phẳng Oxy)
     horiz = P_red[:2] - P_yellow[:2]
     norm = np.linalg.norm(horiz)
     
     if norm > 0:
-        # Điểm thả khi bay = vị trí trực thăng + hướng về nhà * khoảng cách cần thiết
         release_xy = P_yellow[:2] + (horiz / norm) * min(d_ngang_donvi, norm)
     else:
         release_xy = P_yellow[:2]
@@ -338,8 +349,8 @@ with col_right:
         st.write(f"- Chiều cao rơi: **{h_meters:.1f} m** (Z = {P_yellow[2]} × 1000)")
         st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**  \n  `t = √(2h/g) = √(2 × {h_meters:.1f} / 9.8)`")
         st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
-        st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**  \n  `s = v × t = 5 × {t_fall:.2f}`")
-        st.write(f"- Khoảng cách ngang hiện tại (trực thăng → nhà): **{norm:.2f} đơn vị**")
+        st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**")
+        st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} đơn vị**")
         st.write(f"- Điểm thả được tính bằng cách lùi từ nhà về phía trực thăng một đoạn `{min(d_ngang_donvi, norm):.2f}` đơn vị")
 
     st.markdown("---")
@@ -381,4 +392,4 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Không dùng ArUco · Chọn 5 điểm thủ công · Nhà vàng-cam · Trực thăng đỏ · Tính thả khi bay chi tiết")
+st.caption("Ảnh chọn điểm đã được làm nét · Nhà vàng-cam · Trực thăng đỏ")
