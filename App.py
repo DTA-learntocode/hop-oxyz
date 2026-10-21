@@ -10,8 +10,8 @@ st.set_page_config(
 
 # ====================== SESSION STATE ======================
 defaults = {
-    "x_red": 3, "y_red": 2, "z_red": 3,
-    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,
+    "x_red": 3, "y_red": 2, "z_red": 3,          # nhà (vàng-cam)
+    "x_yellow": 5, "y_yellow": 0, "z_yellow": 1,  # trực thăng (đỏ)
     "floor_ok": False,
     "wall_ok": False,
     "points": {"O": None, "X": None, "Y": None, "Z": None, "B": None},
@@ -31,24 +31,29 @@ col_left, col_right = st.columns([1.15, 1])
 
 # ====================== HÀM TIỆN ÍCH ======================
 def detect_color_centroid(img, color="yellow"):
+    """nhà = vàng-cam | trực thăng = đỏ"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    
     if color == "yellow":
-        mask = cv2.inRange(hsv, np.array([15, 70, 70]), np.array([40, 255, 255]))
+        # Range rộng cho màu cam - vàng của nhà
+        mask = cv2.inRange(hsv, np.array([5, 80, 80]), np.array([35, 255, 255]))
     else:  # red
         mask1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
         mask2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
 
-    kernel = np.ones((5, 5), np.uint8)
+    kernel = np.ones((7, 7), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
+    
     largest = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(largest) < 80:
+    if cv2.contourArea(largest) < 300:          # bỏ qua vật quá nhỏ
         return None
+    
     M = cv2.moments(largest)
     if M["m00"] == 0:
         return None
@@ -81,9 +86,9 @@ with col_left:
     st.info(
         "**Cách chọn điểm:**\n"
         "1. Chọn điểm đang muốn gán (O → X → Y → Z → B)\n"
-        "2. Di chuột trên ảnh → sẽ hiện tọa độ **u, v**\n"
-        "3. Nhập số đó vào ô bên dưới rồi bấm **Lưu điểm**\n\n"
-        "**nhà** = vàng · **trực thăng** = đỏ"
+        "2. Di chuột trên ảnh → hiện tọa độ **u, v**\n"
+        "3. Nhập số vào ô rồi bấm **Lưu điểm**\n\n"
+        "**nhà** = vàng-cam · **trực thăng** = đỏ"
     )
 
     img_file = st.camera_input("Chụp ảnh mô hình", key="cam") or \
@@ -120,11 +125,10 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # ----- Ảnh Plotly có hiện tọa độ khi hover -----
+        # Ảnh Plotly có hiện tọa độ khi hover
         fig = go.Figure()
         fig.add_trace(go.Image(z=img_rgb, hovertemplate="u: %{x:.0f}<br>v: %{y:.0f}<extra></extra>"))
 
-        # Vẽ các điểm đã chọn lên ảnh
         colors = {
             "O": "red", "X": "lime", "Y": "cyan", "Z": "magenta", "B": "yellow"
         }
@@ -145,7 +149,7 @@ with col_left:
         fig.update_layout(
             margin=dict(l=0, r=0, t=30, b=0),
             xaxis=dict(visible=False, range=[0, w]),
-            yaxis=dict(visible=False, range=[h, 0]),  # đảo y cho đúng ảnh
+            yaxis=dict(visible=False, range=[h, 0]),
             height=420,
             dragmode=False,
         )
@@ -155,7 +159,7 @@ with col_left:
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         st.caption("Di chuột trên ảnh để xem tọa độ u, v")
 
-        # ----- Nhập tọa độ điểm hiện tại -----
+        # Nhập tọa độ điểm hiện tại
         st.markdown(f"##### Nhập tọa độ cho điểm **{current}**")
         c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
@@ -235,9 +239,9 @@ with col_left:
                     st.session_state.ry = auto_y
                     st.session_state.rz = 3
                     st.session_state.floor_ok = True
-                    st.success(f"**Nhà (vàng)** → **({auto_x}, {auto_y}, 3)**")
+                    st.success(f"**Nhà (vàng-cam)** → **({auto_x}, {auto_y}, 3)**")
                 else:
-                    st.warning("Không thấy nhà (vàng)")
+                    st.warning("Không thấy nhà (vàng-cam)")
 
                 if pin_heli:
                     xhe, zhe = apply_affine(M_wall, pin_heli)
@@ -269,7 +273,7 @@ with col_right:
     elif st.session_state.wall_ok:
         st.info("Đã có tọa độ trực thăng")
 
-    st.markdown("**nhà** (vàng)")
+    st.markdown("**nhà** (vàng-cam) — Z mặc định = 3")
     c1, c2, c3 = st.columns(3)
     x_red = c1.number_input("X", 0, MAX_X, key="rx")
     y_red = c2.number_input("Y", 0, MAX_Y, key="ry")
@@ -291,27 +295,52 @@ with col_right:
     P_red = np.array([x_red, y_red, z_red], dtype=float)
     P_yellow = np.array([x_yellow, y_yellow, z_yellow], dtype=float)
 
+    # ========== TÍNH TOÁN CHI TIẾT (giống bản gốc) ==========
     distance = np.linalg.norm(P_red - P_yellow)
+    
+    # Điểm thả thẳng đứng (cùng X,Y với nhà, cùng Z với trực thăng)
     P_drop = np.array([P_red[0], P_red[1], P_yellow[2]])
+    
+    # Tính thời gian rơi và khoảng cách ngang
+    # Giả sử 1 đơn vị = 1000 m, vận tốc bay ngang = 5 m/s
     h_meters = P_yellow[2] * 1000.0
     t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
-    d_ngang_km = (5.0 * t_fall) / 1000.0
+    d_ngang_km = (5.0 * t_fall) / 1000.0          # quãng đường ngang (km)
+    d_ngang_donvi = d_ngang_km                    # vì 1 đơn vị = 1 km trong giả định này
 
+    # Vector hướng từ trực thăng đến nhà (trên mặt phẳng Oxy)
     horiz = P_red[:2] - P_yellow[:2]
     norm = np.linalg.norm(horiz)
+    
     if norm > 0:
-        release_xy = P_yellow[:2] + (horiz / norm) * min(d_ngang_km, norm)
+        # Điểm thả khi bay = vị trí trực thăng + hướng về nhà * khoảng cách cần thiết
+        release_xy = P_yellow[:2] + (horiz / norm) * min(d_ngang_donvi, norm)
     else:
         release_xy = P_yellow[:2]
+    
     P_release = np.array([release_xy[0], release_xy[1], P_yellow[2]])
 
     st.markdown("---")
-    st.subheader("Kết quả tính toán")
+    st.subheader("Kết quả tính toán chi tiết")
+
     st.write(f"**nhà:** `{list(P_red)}`")
     st.write(f"**trực thăng:** `{list(P_yellow)}`")
-    st.warning(f"Khoảng cách: **{distance:.2f} đơn vị**")
-    st.success(f"Thả thẳng đứng: `{list(P_drop)}`")
-    st.info(f"Thả khi bay: `({P_release[0]:.2f}, {P_release[1]:.2f}, {P_release[2]})`")
+    st.warning(f"**Khoảng cách 3D:** `{distance:.2f}` đơn vị")
+
+    st.markdown("##### 1. Thả thẳng đứng")
+    st.success(f"Tọa độ điểm thả: `{list(P_drop)}`")
+    st.caption("Cùng X,Y với nhà – cùng độ cao Z với trực thăng")
+
+    st.markdown("##### 2. Thả khi đang bay")
+    st.info(f"Tọa độ điểm thả: `({P_release[0]:.2f}, {P_release[1]:.2f}, {P_release[2]})`")
+    
+    with st.expander("Chi tiết tính toán thả khi bay"):
+        st.write(f"- Chiều cao rơi: **{h_meters:.1f} m** (Z = {P_yellow[2]} × 1000)")
+        st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**  \n  `t = √(2h/g) = √(2 × {h_meters:.1f} / 9.8)`")
+        st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
+        st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**  \n  `s = v × t = 5 × {t_fall:.2f}`")
+        st.write(f"- Khoảng cách ngang hiện tại (trực thăng → nhà): **{norm:.2f} đơn vị**")
+        st.write(f"- Điểm thả được tính bằng cách lùi từ nhà về phía trực thăng một đoạn `{min(d_ngang_donvi, norm):.2f}` đơn vị")
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
@@ -327,9 +356,14 @@ with col_right:
         text=["trực thăng"], name="trực thăng",
     ))
     fig3d.add_trace(go.Scatter3d(
+        x=[P_drop[0]], y=[P_drop[1]], z=[P_drop[2]],
+        mode="markers+text", marker=dict(size=9, color="lime", symbol="circle"),
+        text=["thả thẳng"], name="thả thẳng đứng",
+    ))
+    fig3d.add_trace(go.Scatter3d(
         x=[P_release[0]], y=[P_release[1]], z=[P_release[2]],
         mode="markers+text", marker=dict(size=10, color="purple", symbol="cross"),
-        text=["điểm thả"], name="điểm thả",
+        text=["thả khi bay"], name="thả khi bay",
     ))
     fig3d.add_trace(go.Scatter3d(
         x=[P_yellow[0], P_red[0]], y=[P_yellow[1], P_red[1]], z=[P_yellow[2], P_red[2]],
@@ -343,8 +377,8 @@ with col_right:
             camera=dict(eye=dict(x=1.6, y=-1.6, z=1.3)),
         ),
         margin=dict(l=0, r=0, b=0, t=20),
-        height=380,
+        height=400,
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Hover chuột trên ảnh để xem tọa độ u, v · Nhà vàng · Trực thăng đỏ")
+st.caption("Không dùng ArUco · Chọn 5 điểm thủ công · Nhà vàng-cam · Trực thăng đỏ · Tính thả khi bay chi tiết")
