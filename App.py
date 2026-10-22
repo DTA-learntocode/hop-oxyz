@@ -110,7 +110,7 @@ with col_left:
         st.caption(f"Kích thước ảnh gốc: **{w_orig} × {h_orig}** px")
 
         st.markdown("---")
-        st.subheader("2. Chọn 5 điểm tham chiếu")
+        st.subheader("2. Chọn 5 điểm tham chiếu (trực thăng thuộc (Oxz))")
 
         point_names = ["O", "X", "Y", "Z", "B"]
         labels = {
