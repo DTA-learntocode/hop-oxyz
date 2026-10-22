@@ -391,4 +391,4 @@ with col_right:
     )
     st.plotly_chart(fig3d, use_container_width=True)
 
-st.caption("Đã tách rõ đỏ và cam · Trực thăng đỏ · Nhà cam · Chỉnh tay không bị reset")
+
