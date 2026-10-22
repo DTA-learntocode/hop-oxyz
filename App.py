@@ -334,7 +334,7 @@ with col_right:
 
     st.write(f"**nhà:** `{list(P_red)}`")
     st.write(f"**trực thăng:** `{list(P_yellow)}`")
-    st.warning(f"**Khoảng cách 3D:** `{distance:.2f}` đơn vị")
+    st.warning(f"**Khoảng cách nhà đến trực thăng:** `{distance:.2f}` km")
 
     st.markdown("##### 1. Thả thẳng đứng")
     st.success(f"Tọa độ điểm thả: `{list(P_drop)}`")
@@ -348,7 +348,7 @@ with col_right:
         st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**")
         st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
         st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**")
-        st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} đơn vị**")
+        st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} km**")
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
