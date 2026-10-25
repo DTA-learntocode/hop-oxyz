@@ -89,10 +89,10 @@ def apply_affine(M, pin):
 with col_left:
     st.subheader("1. Chụp / tải ảnh mô hình")
     st.info(
-        "**Cách chọn điểm:**\n"
+        "**Cách chọn điểm (mới):**\n"
         "1. Chọn điểm đang muốn gán (O → X → Y → Z → B)\n"
-        "2. Di chuột trên ảnh → hiện tọa độ **u, v**\n"
-        "3. Nhập số vào ô rồi bấm **Lưu điểm**\n\n"
+        "2. **Bấm chuột trực tiếp** lên ảnh → điểm sẽ được lưu ngay\n"
+        "3. Không cần nhập số tay nữa\n\n"
         "**nhà** = cam · **trực thăng** = đỏ"
     )
 
@@ -103,6 +103,7 @@ with col_left:
         file_bytes = np.frombuffer(img_file.getvalue(), np.uint8)
         img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
         st.session_state.img_bgr = img_bgr
         st.session_state.img_rgb = img_rgb
 
@@ -135,6 +136,7 @@ with col_left:
         scale = min(1.0, max_display_width / w_orig)
         disp_w = int(w_orig * scale)
         disp_h = int(h_orig * scale)
+
         img_display = cv2.resize(img_rgb, (disp_w, disp_h), interpolation=cv2.INTER_AREA)
 
         fig = go.Figure()
@@ -169,30 +171,43 @@ with col_left:
             yaxis=dict(visible=False, range=[disp_h, 0]),
             height=460,
             dragmode=False,
+            clickmode="event+select",          # quan trọng: cho phép click
         )
         fig.update_xaxes(showticklabels=False)
         fig.update_yaxes(showticklabels=False)
 
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        st.caption("Di chuột trên ảnh để xem tọa độ u, v")
+        # --- BẮT SỰ KIỆN CLICK ---
+        selected = st.plotly_chart(
+            fig,
+            use_container_width=True,
+            config={"displayModeBar": False},
+            on_select="rerun",                 # tự rerun khi click
+            selection_mode="points",
+            key="plotly_image"
+        )
 
-        # Nhập tọa độ điểm
-        st.markdown(f"##### Nhập tọa độ cho điểm **{current}**")
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c1:
-            default_u = st.session_state.points[current][0] if st.session_state.points[current] else w_orig // 2
-            u_val = st.number_input("u (ngang)", 0, w_orig-1, value=int(default_u), key=f"input_u_{current}")
-        with c2:
-            default_v = st.session_state.points[current][1] if st.session_state.points[current] else h_orig // 2
-            v_val = st.number_input("v (dọc)", 0, h_orig-1, value=int(default_v), key=f"input_v_{current}")
-        with c3:
-            st.write("")
-            st.write("")
-            if st.button(f"Lưu điểm {current}", type="primary"):
-                st.session_state.points[current] = (int(u_val), int(v_val))
-                st.success(f"Đã lưu **{current}** = ({u_val}, {v_val})")
-                st.rerun()
+        # Xử lý click
+        if selected and selected.selection and selected.selection.points:
+            point = selected.selection.points[0]
+            # tọa độ trên ảnh hiển thị
+            x_disp = point["x"]
+            y_disp = point["y"]
 
+            # chuyển về tọa độ gốc
+            u = int(round(x_disp / scale))
+            v = int(round(y_disp / scale))
+
+            # giới hạn trong ảnh
+            u = max(0, min(u, w_orig - 1))
+            v = max(0, min(v, h_orig - 1))
+
+            st.session_state.points[current] = (u, v)
+            st.success(f"Đã lưu **{current}** = ({u}, {v}) bằng click")
+            st.rerun()
+
+        st.caption("Bấm chuột trực tiếp lên ảnh để chọn điểm (không cần nhập số)")
+
+        # Trạng thái 5 điểm
         st.markdown("##### Trạng thái 5 điểm:")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
@@ -209,6 +224,7 @@ with col_left:
 
         # ---------- PHÁT HIỆN MÀU ----------
         all_set = all(st.session_state.points[p] is not None for p in point_names)
+
         if all_set:
             st.markdown("---")
             st.subheader("3. Kết quả phát hiện - đã làm tròn thông số")
@@ -249,6 +265,7 @@ with col_left:
                     xh, yh = apply_homography(H_floor, pin_house)
                     auto_x, auto_y = int(round(xh)), int(round(yh))
                     new_auto = (auto_x, auto_y, 3)
+
                     if st.session_state.last_auto_house != new_auto:
                         st.session_state.x_red = auto_x
                         st.session_state.y_red = auto_y
@@ -257,6 +274,7 @@ with col_left:
                         st.session_state.ry = auto_y
                         st.session_state.rz = 3
                         st.session_state.last_auto_house = new_auto
+
                     st.session_state.floor_ok = True
                     st.success(f"**Nhà (cam)** → **({auto_x}, {auto_y}, 3)**")
                 else:
@@ -266,6 +284,7 @@ with col_left:
                     xhe, zhe = apply_affine(M_wall, pin_heli)
                     auto_x, auto_z = int(round(xhe)), int(round(zhe))
                     new_auto = (auto_x, 0, auto_z)
+
                     if st.session_state.last_auto_heli != new_auto:
                         st.session_state.x_yellow = auto_x
                         st.session_state.y_yellow = 0
@@ -274,6 +293,7 @@ with col_left:
                         st.session_state.yy = 0
                         st.session_state.yz = auto_z
                         st.session_state.last_auto_heli = new_auto
+
                     st.session_state.wall_ok = True
                     st.success(f"**Trực thăng (đỏ)** → **({auto_x}, 0, {auto_z})**")
                 else:
@@ -312,6 +332,7 @@ with col_right:
 
     # ========== TÍNH TOÁN CHI TIẾT ==========
     distance = np.linalg.norm(P_red - P_yellow)
+
     P_drop = np.array([P_red[0], P_red[1], P_yellow[2]])
     
     h_meters = P_yellow[2] * 1000.0
@@ -354,6 +375,7 @@ with col_right:
     st.subheader("Mô hình 3D")
 
     fig3d = go.Figure()
+
     fig3d.add_trace(go.Scatter3d(
         x=[P_red[0]], y=[P_red[1]], z=[P_red[2]],
         mode="markers+text", marker=dict(size=12, color="orange", symbol="diamond"),
@@ -390,5 +412,3 @@ with col_right:
         height=400,
     )
     st.plotly_chart(fig3d, use_container_width=True)
-
-
