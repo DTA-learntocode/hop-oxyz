@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
+from PIL import Image
+from streamlit_drawable_canvas import st_canvas
 
 st.set_page_config(
     page_title=" -Hộp Oxyz- ",
@@ -88,8 +90,8 @@ with col_left:
     st.info(
         "**Cách chọn điểm:**\n"
         "1. Chọn điểm đang muốn gán (O → X → Y → Z → B)\n"
-        "2. **Bấm chuột** trực tiếp lên ảnh → điểm được lưu ngay\n"
-        "3. Không cần nhập số tay\n\n"
+        "2. **Bấm chuột** lên ảnh → điểm được lưu ngay\n"
+        "3. Có thể xóa điểm bằng nút bên dưới\n\n"
         "**nhà** = cam · **trực thăng** = đỏ"
     )
 
@@ -128,95 +130,55 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # ====================== HIỂN THỊ ẢNH + LỚP CLICK ======================
+        # ====================== CANVAS ĐỂ BẤM CHỌN ĐIỂM ======================
         max_display_width = 780
         scale = min(1.0, max_display_width / w_orig)
         disp_w = int(w_orig * scale)
         disp_h = int(h_orig * scale)
 
         img_display = cv2.resize(img_rgb, (disp_w, disp_h), interpolation=cv2.INTER_AREA)
+        bg_image = Image.fromarray(img_display)
 
-        fig = go.Figure()
-
-        # Ảnh nền
-        fig.add_trace(go.Image(z=img_display))
-
-        # === LỚP ĐIỂM TRONG SUỐT ĐỂ BẮT CLICK (quan trọng) ===
-        # Tạo lưới điểm dày để click chính xác hơn
-        n_grid = 80          # càng cao càng chính xác (nhưng chậm hơn một chút)
-        xs = np.linspace(0, disp_w - 1, n_grid)
-        ys = np.linspace(0, disp_h - 1, n_grid)
-        xx, yy = np.meshgrid(xs, ys)
-
-        fig.add_trace(go.Scatter(
-            x=xx.flatten(),
-            y=yy.flatten(),
-            mode="markers",
-            marker=dict(size=12, opacity=0),   # hoàn toàn trong suốt
-            hoverinfo="skip",
-            showlegend=False,
-            name="click_layer"
-        ))
-
-        # Vẽ các điểm đã chọn
-        colors = {"O": "red", "X": "lime", "Y": "cyan", "Z": "magenta", "B": "yellow"}
-        for name, pt in st.session_state.points.items():
-            if pt is not None:
-                x_disp = pt[0] * scale
-                y_disp = pt[1] * scale
-                fig.add_trace(go.Scatter(
-                    x=[x_disp], y=[y_disp],
-                    mode="markers+text",
-                    marker=dict(size=18, color=colors[name], line=dict(width=2, color="white")),
-                    text=[name],
-                    textposition="top center",
-                    textfont=dict(size=15, color="white", family="Arial Black"),
-                    hoverinfo="skip",
-                    showlegend=False
-                ))
-
-        fig.update_layout(
-            margin=dict(l=0, r=0, t=20, b=0),
-            xaxis=dict(visible=False, range=[0, disp_w], fixedrange=True),
-            yaxis=dict(visible=False, range=[disp_h, 0], fixedrange=True),
-            height=480,
-            dragmode=False,
-            clickmode="event+select",
-        )
-        fig.update_xaxes(showticklabels=False)
-        fig.update_yaxes(showticklabels=False)
-
-        # Bắt sự kiện click
-        event = st.plotly_chart(
-            fig,
-            use_container_width=True,
-            config={"displayModeBar": False},
-            on_select="rerun",
-            selection_mode="points",
-            key="click_chart"
+        # Canvas cho phép bấm điểm
+        canvas_result = st_canvas(
+            fill_color="rgba(255, 0, 0, 0.3)",
+            stroke_width=3,
+            stroke_color="#FF0000",
+            background_image=bg_image,
+            update_streamlit=True,
+            height=disp_h,
+            width=disp_w,
+            drawing_mode="point",          # quan trọng: chế độ bấm điểm
+            point_display_radius=6,
+            key=f"canvas_{current}",       # key thay đổi theo điểm đang chọn
+            display_toolbar=True,
         )
 
-        # Xử lý khi người dùng bấm
-        if event and event.selection and event.selection.points:
-            # Lấy điểm đầu tiên được chọn (từ lớp click_layer)
-            pt = event.selection.points[0]
-            x_disp = pt["x"]
-            y_disp = pt["y"]
+        # Xử lý khi người dùng bấm điểm mới
+        if canvas_result.json_data is not None:
+            objects = canvas_result.json_data["objects"]
+            if len(objects) > 0:
+                # Lấy điểm cuối cùng được bấm
+                last_obj = objects[-1]
+                if last_obj["type"] == "circle":          # point mode tạo ra circle
+                    x_disp = last_obj["left"] + last_obj["radius"]
+                    y_disp = last_obj["top"] + last_obj["radius"]
 
-            # Quy đổi về tọa độ gốc
-            u = int(round(x_disp / scale))
-            v = int(round(y_disp / scale))
+                    # Quy đổi về tọa độ gốc
+                    u = int(round(x_disp / scale))
+                    v = int(round(y_disp / scale))
+                    u = max(0, min(u, w_orig - 1))
+                    v = max(0, min(v, h_orig - 1))
 
-            u = max(0, min(u, w_orig - 1))
-            v = max(0, min(v, h_orig - 1))
+                    # Chỉ lưu nếu điểm này chưa được lưu (tránh lưu liên tục)
+                    if st.session_state.points[current] != (u, v):
+                        st.session_state.points[current] = (u, v)
+                        st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
+                        st.rerun()
 
-            st.session_state.points[current] = (u, v)
-            st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
-            st.rerun()
+        st.caption("👉 Bấm chuột trực tiếp lên ảnh để chọn điểm")
 
-        st.caption("👉 Bấm chuột **trực tiếp lên ảnh** để chọn điểm")
-
-        # Trạng thái
+        # Hiển thị các điểm đã chọn (để dễ nhìn)
         st.markdown("##### Trạng thái 5 điểm:")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
@@ -227,9 +189,15 @@ with col_left:
                 else:
                     st.warning(f"**{name}**\nchưa chọn")
 
-        if st.button("Xóa tất cả điểm"):
-            st.session_state.points = {"O": None, "X": None, "Y": None, "Z": None, "B": None}
-            st.rerun()
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("Xóa điểm hiện tại"):
+                st.session_state.points[current] = None
+                st.rerun()
+        with col_btn2:
+            if st.button("Xóa tất cả điểm"):
+                st.session_state.points = {"O": None, "X": None, "Y": None, "Z": None, "B": None}
+                st.rerun()
 
         # ---------- PHÁT HIỆN MÀU ----------
         all_set = all(st.session_state.points[p] is not None for p in point_names)
