@@ -153,23 +153,31 @@ with col_left:
         )
 
         # Xử lý khi người dùng bấm điểm mới
-        if canvas_result.json_data is not None:
-            objects = canvas_result.json_data["objects"]
-            if len(objects) > 0:
-                last_obj = objects[-1]
-                if last_obj["type"] == "circle":
-                    x_disp = last_obj["left"] + last_obj.get("radius", 0)
-                    y_disp = last_obj["top"] + last_obj.get("radius", 0)
+if canvas_result.json_data is not None and "objects" in canvas_result.json_data:
+    objects = canvas_result.json_data["objects"]
+    
+    if len(objects) > 0:
+        last_obj = objects[-1]
+        
+        # Hỗ trợ cả "circle" và "Circle"
+        obj_type = last_obj.get("type", "").lower()
+        
+        if obj_type == "circle":
+            radius = last_obj.get("radius", 0)
+            x_disp = last_obj["left"] + radius
+            y_disp = last_obj["top"] + radius
 
-                    u = int(round(x_disp / scale))
-                    v = int(round(y_disp / scale))
-                    u = max(0, min(u, w_orig - 1))
-                    v = max(0, min(v, h_orig - 1))
+            # Quy đổi về tọa độ gốc
+            u = int(round(x_disp / scale))
+            v = int(round(y_disp / scale))
+            u = max(0, min(u, w_orig - 1))
+            v = max(0, min(v, h_orig - 1))
 
-                    if st.session_state.points[current] != (u, v):
-                        st.session_state.points[current] = (u, v)
-                        st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
-                        st.rerun()
+            # Chỉ lưu khi tọa độ khác với điểm hiện tại
+            if st.session_state.points.get(current) != (u, v):
+                st.session_state.points[current] = (u, v)
+                st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
+                st.rerun()
 
         st.caption("👉 Bấm chuột trực tiếp lên ảnh để chọn điểm")
 
