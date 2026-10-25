@@ -130,51 +130,49 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # ====================== CANVAS ĐỂ BẤM CHỌN ĐIỂM ======================
-        max_display_width = 780
-        scale = min(1.0, max_display_width / w_orig)
-        disp_w = int(w_orig * scale)
-        disp_h = int(h_orig * scale)
+       # ====================== CANVAS ĐỂ BẤM CHỌN ĐIỂM ======================
+max_display_width = 780
+scale = min(1.0, max_display_width / w_orig)
+disp_w = int(w_orig * scale)
+disp_h = int(h_orig * scale)
 
-        img_display = cv2.resize(img_rgb, (disp_w, disp_h), interpolation=cv2.INTER_AREA)
-        bg_image = Image.fromarray(img_display)
+img_display = cv2.resize(img_rgb, (disp_w, disp_h), interpolation=cv2.INTER_AREA)
+bg_image = Image.fromarray(img_display)
 
-        # Canvas cho phép bấm điểm
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 0, 0, 0.3)",
-            stroke_width=3,
-            stroke_color="#FF0000",
-            background_image=bg_image,
-            update_streamlit=True,
-            height=disp_h,
-            width=disp_w,
-            drawing_mode="point",          # quan trọng: chế độ bấm điểm
-            point_display_radius=6,
-            key=f"canvas_{current}",       # key thay đổi theo điểm đang chọn
-            display_toolbar=True,
-        )
+# Canvas cho phép bấm điểm
+canvas_result = st_canvas(
+    fill_color="rgba(255, 0, 0, 0.3)",
+    stroke_width=3,
+    stroke_color="#FF0000",
+    background_image=bg_image,
+    update_streamlit=True,
+    height=disp_h,
+    width=disp_w,
+    drawing_mode="point",
+    point_display_radius=6,
+    key=f"canvas_{current}",
+    # KHÔNG còn display_toolbar nữa
+)
 
-        # Xử lý khi người dùng bấm điểm mới
-        if canvas_result.json_data is not None:
-            objects = canvas_result.json_data["objects"]
-            if len(objects) > 0:
-                # Lấy điểm cuối cùng được bấm
-                last_obj = objects[-1]
-                if last_obj["type"] == "circle":          # point mode tạo ra circle
-                    x_disp = last_obj["left"] + last_obj["radius"]
-                    y_disp = last_obj["top"] + last_obj["radius"]
+# Xử lý khi người dùng bấm điểm mới
+if canvas_result.json_data is not None:
+    objects = canvas_result.json_data["objects"]
+    if len(objects) > 0:
+        last_obj = objects[-1]
+        if last_obj["type"] == "circle":          # point mode tạo ra circle
+            x_disp = last_obj["left"] + last_obj.get("radius", 0)
+            y_disp = last_obj["top"] + last_obj.get("radius", 0)
 
-                    # Quy đổi về tọa độ gốc
-                    u = int(round(x_disp / scale))
-                    v = int(round(y_disp / scale))
-                    u = max(0, min(u, w_orig - 1))
-                    v = max(0, min(v, h_orig - 1))
+            # Quy đổi về tọa độ gốc
+            u = int(round(x_disp / scale))
+            v = int(round(y_disp / scale))
+            u = max(0, min(u, w_orig - 1))
+            v = max(0, min(v, h_orig - 1))
 
-                    # Chỉ lưu nếu điểm này chưa được lưu (tránh lưu liên tục)
-                    if st.session_state.points[current] != (u, v):
-                        st.session_state.points[current] = (u, v)
-                        st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
-                        st.rerun()
+            if st.session_state.points[current] != (u, v):
+                st.session_state.points[current] = (u, v)
+                st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
+                st.rerun()
 
         st.caption("👉 Bấm chuột trực tiếp lên ảnh để chọn điểm")
 
