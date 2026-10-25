@@ -33,15 +33,12 @@ col_left, col_right = st.columns([1.15, 1])
 
 # ====================== HÀM TIỆN ÍCH ======================
 def detect_color_centroid(img, color="yellow"):
-    """nhà = cam | trực thăng = đỏ (đã tách rõ để không đụng nhau)"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
     if color == "yellow":
-        # Cam (orange) – tránh vùng đỏ và vàng thuần
         mask = cv2.inRange(hsv, np.array([5, 100, 100]), np.array([25, 255, 255]))
         min_area = 300
     else:
-        # Đỏ thật (tránh vùng cam)
         mask1 = cv2.inRange(hsv, np.array([0, 100, 80]), np.array([7, 255, 255]))
         mask2 = cv2.inRange(hsv, np.array([170, 100, 80]), np.array([180, 255, 255]))
         mask = cv2.bitwise_or(mask1, mask2)
@@ -89,10 +86,10 @@ def apply_affine(M, pin):
 with col_left:
     st.subheader("1. Chụp / tải ảnh mô hình")
     st.info(
-        "**Cách chọn điểm (mới):**\n"
+        "**Cách chọn điểm:**\n"
         "1. Chọn điểm đang muốn gán (O → X → Y → Z → B)\n"
-        "2. **Bấm chuột trực tiếp** lên ảnh → điểm sẽ được lưu ngay\n"
-        "3. Không cần nhập số tay nữa\n\n"
+        "2. **Bấm chuột** trực tiếp lên ảnh → điểm được lưu ngay\n"
+        "3. Không cần nhập số tay\n\n"
         "**nhà** = cam · **trực thăng** = đỏ"
     )
 
@@ -111,7 +108,7 @@ with col_left:
         st.caption(f"Kích thước ảnh gốc: **{w_orig} × {h_orig}** px")
 
         st.markdown("---")
-        st.subheader("2. Chọn 5 điểm tham chiếu (trực thăng thuộc (Oxz))")
+        st.subheader("2. Chọn 5 điểm tham chiếu")
 
         point_names = ["O", "X", "Y", "Z", "B"]
         labels = {
@@ -131,7 +128,7 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # Ảnh hiển thị
+        # ====================== HIỂN THỊ ẢNH + LỚP CLICK ======================
         max_display_width = 780
         scale = min(1.0, max_display_width / w_orig)
         disp_w = int(w_orig * scale)
@@ -140,15 +137,28 @@ with col_left:
         img_display = cv2.resize(img_rgb, (disp_w, disp_h), interpolation=cv2.INTER_AREA)
 
         fig = go.Figure()
-        fig.add_trace(go.Image(
-            z=img_display,
-            hovertemplate="u: %{customdata[0]:.0f}<br>v: %{customdata[1]:.0f}<extra></extra>",
-            customdata=np.stack([
-                np.linspace(0, w_orig-1, disp_w).astype(int)[None, :].repeat(disp_h, axis=0),
-                np.linspace(0, h_orig-1, disp_h).astype(int)[:, None].repeat(disp_w, axis=1)
-            ], axis=-1)
+
+        # Ảnh nền
+        fig.add_trace(go.Image(z=img_display))
+
+        # === LỚP ĐIỂM TRONG SUỐT ĐỂ BẮT CLICK (quan trọng) ===
+        # Tạo lưới điểm dày để click chính xác hơn
+        n_grid = 80          # càng cao càng chính xác (nhưng chậm hơn một chút)
+        xs = np.linspace(0, disp_w - 1, n_grid)
+        ys = np.linspace(0, disp_h - 1, n_grid)
+        xx, yy = np.meshgrid(xs, ys)
+
+        fig.add_trace(go.Scatter(
+            x=xx.flatten(),
+            y=yy.flatten(),
+            mode="markers",
+            marker=dict(size=12, opacity=0),   # hoàn toàn trong suốt
+            hoverinfo="skip",
+            showlegend=False,
+            name="click_layer"
         ))
 
+        # Vẽ các điểm đã chọn
         colors = {"O": "red", "X": "lime", "Y": "cyan", "Z": "magenta", "B": "yellow"}
         for name, pt in st.session_state.points.items():
             if pt is not None:
@@ -167,47 +177,46 @@ with col_left:
 
         fig.update_layout(
             margin=dict(l=0, r=0, t=20, b=0),
-            xaxis=dict(visible=False, range=[0, disp_w]),
-            yaxis=dict(visible=False, range=[disp_h, 0]),
-            height=460,
+            xaxis=dict(visible=False, range=[0, disp_w], fixedrange=True),
+            yaxis=dict(visible=False, range=[disp_h, 0], fixedrange=True),
+            height=480,
             dragmode=False,
-            clickmode="event+select",          # quan trọng: cho phép click
+            clickmode="event+select",
         )
         fig.update_xaxes(showticklabels=False)
         fig.update_yaxes(showticklabels=False)
 
-        # --- BẮT SỰ KIỆN CLICK ---
-        selected = st.plotly_chart(
+        # Bắt sự kiện click
+        event = st.plotly_chart(
             fig,
             use_container_width=True,
             config={"displayModeBar": False},
-            on_select="rerun",                 # tự rerun khi click
+            on_select="rerun",
             selection_mode="points",
-            key="plotly_image"
+            key="click_chart"
         )
 
-        # Xử lý click
-        if selected and selected.selection and selected.selection.points:
-            point = selected.selection.points[0]
-            # tọa độ trên ảnh hiển thị
-            x_disp = point["x"]
-            y_disp = point["y"]
+        # Xử lý khi người dùng bấm
+        if event and event.selection and event.selection.points:
+            # Lấy điểm đầu tiên được chọn (từ lớp click_layer)
+            pt = event.selection.points[0]
+            x_disp = pt["x"]
+            y_disp = pt["y"]
 
-            # chuyển về tọa độ gốc
+            # Quy đổi về tọa độ gốc
             u = int(round(x_disp / scale))
             v = int(round(y_disp / scale))
 
-            # giới hạn trong ảnh
             u = max(0, min(u, w_orig - 1))
             v = max(0, min(v, h_orig - 1))
 
             st.session_state.points[current] = (u, v)
-            st.success(f"Đã lưu **{current}** = ({u}, {v}) bằng click")
+            st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
             st.rerun()
 
-        st.caption("Bấm chuột trực tiếp lên ảnh để chọn điểm (không cần nhập số)")
+        st.caption("👉 Bấm chuột **trực tiếp lên ảnh** để chọn điểm")
 
-        # Trạng thái 5 điểm
+        # Trạng thái
         st.markdown("##### Trạng thái 5 điểm:")
         cols = st.columns(5)
         for i, name in enumerate(point_names):
@@ -227,7 +236,7 @@ with col_left:
 
         if all_set:
             st.markdown("---")
-            st.subheader("3. Kết quả phát hiện - đã làm tròn thông số")
+            st.subheader("3. Kết quả phát hiện")
 
             pts = st.session_state.points
             img = st.session_state.img_bgr
@@ -242,7 +251,7 @@ with col_left:
             }
 
             if pin_house:
-                cv2.circle(img_draw, pin_house, 14, (0, 165, 255), 3)  # cam
+                cv2.circle(img_draw, pin_house, 14, (0, 165, 255), 3)
                 cv2.putText(img_draw, "nha", (pin_house[0]+12, pin_house[1]),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
             if pin_heli:
@@ -330,9 +339,7 @@ with col_right:
     P_red = np.array([x_red, y_red, z_red], dtype=float)
     P_yellow = np.array([x_yellow, y_yellow, z_yellow], dtype=float)
 
-    # ========== TÍNH TOÁN CHI TIẾT ==========
     distance = np.linalg.norm(P_red - P_yellow)
-
     P_drop = np.array([P_red[0], P_red[1], P_yellow[2]])
     
     h_meters = P_yellow[2] * 1000.0
