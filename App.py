@@ -130,7 +130,7 @@ with col_left:
         )
         st.session_state.current_point = current
 
-        # ====================== CANVAS ĐỂ BẤM CHỌN ĐIỂM ======================
+        # ---------- CANVAS ----------
         max_display_width = 780
         scale = min(1.0, max_display_width / w_orig)
         disp_w = int(w_orig * scale)
@@ -152,32 +152,27 @@ with col_left:
             key=f"canvas_{current}",
         )
 
-        # Xử lý khi người dùng bấm điểm mới
-if canvas_result.json_data is not None and "objects" in canvas_result.json_data:
-    objects = canvas_result.json_data["objects"]
-    
-    if len(objects) > 0:
-        last_obj = objects[-1]
-        
-        # Hỗ trợ cả "circle" và "Circle"
-        obj_type = last_obj.get("type", "").lower()
-        
-        if obj_type == "circle":
-            radius = last_obj.get("radius", 0)
-            x_disp = last_obj["left"] + radius
-            y_disp = last_obj["top"] + radius
+        # ---------- XỬ LÝ LƯU ĐIỂM ----------
+        if canvas_result.json_data is not None and "objects" in canvas_result.json_data:
+            objects = canvas_result.json_data["objects"]
+            if len(objects) > 0:
+                last_obj = objects[-1]
+                obj_type = str(last_obj.get("type", "")).lower()
 
-            # Quy đổi về tọa độ gốc
-            u = int(round(x_disp / scale))
-            v = int(round(y_disp / scale))
-            u = max(0, min(u, w_orig - 1))
-            v = max(0, min(v, h_orig - 1))
+                if obj_type == "circle":
+                    radius = last_obj.get("radius", 0)
+                    x_disp = last_obj["left"] + radius
+                    y_disp = last_obj["top"] + radius
 
-            # Chỉ lưu khi tọa độ khác với điểm hiện tại
-            if st.session_state.points.get(current) != (u, v):
-                st.session_state.points[current] = (u, v)
-                st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
-                st.rerun()
+                    u = int(round(x_disp / scale))
+                    v = int(round(y_disp / scale))
+                    u = max(0, min(u, w_orig - 1))
+                    v = max(0, min(v, h_orig - 1))
+
+                    if st.session_state.points.get(current) != (u, v):
+                        st.session_state.points[current] = (u, v)
+                        st.success(f"✅ Đã lưu **{current}** = ({u}, {v})")
+                        st.rerun()
 
         st.caption("👉 Bấm chuột trực tiếp lên ảnh để chọn điểm")
 
