@@ -351,7 +351,6 @@ with col_right:
         st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
         st.write(f"- Quãng đường ngang cần có (s): **{s:.3f} km**")
         st.write(f"- Khoảng cách ngang hiện tại (d): **{d:.2f} km**")
-        st.write(r"- Công thức: $X_C = X_{nhà} - s \times \dfrac{X_{nhà} - X_{tt}}{d}$")
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
