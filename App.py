@@ -305,10 +305,13 @@ with col_right:
     P_red = np.array([x_red, y_red, z_red], dtype=float)
     P_yellow = np.array([x_yellow, y_yellow, z_yellow], dtype=float)
 
+    # ========== TÍNH TOÁN ==========
     distance = np.linalg.norm(P_red - P_yellow)
+
+    # Điểm thả thẳng đứng
     P_drop = np.array([P_red[0], P_red[1], P_yellow[2]])
-    
-   # Chiều cao rơi thực tế = độ cao trực thăng - độ cao mái nhà
+
+    # Chiều cao rơi thực tế = độ cao trực thăng - độ cao mái nhà
     h_meters = max(0.0, (P_yellow[2] - P_red[2]) * 1000.0)
     t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
     d_ngang_km = (5.0 * t_fall) / 1000.0
@@ -316,12 +319,12 @@ with col_right:
 
     horiz = P_red[:2] - P_yellow[:2]
     norm = np.linalg.norm(horiz)
-    
+
     if norm > 0:
         release_xy = P_yellow[:2] + (horiz / norm) * min(d_ngang_donvi, norm)
     else:
         release_xy = P_yellow[:2]
-    
+
     P_release = np.array([release_xy[0], release_xy[1], P_yellow[2]])
 
     st.markdown("---")
@@ -337,13 +340,13 @@ with col_right:
 
     st.markdown("##### 2. Thả khi đang bay")
     st.info(f"Tọa độ điểm thả: `({P_release[0]:.2f}, {P_release[1]:.2f}, {P_release[2]})`")
-    
+
     with st.expander("Chi tiết tính toán thả khi bay"):
-    st.write(f"- Chiều cao rơi thực tế: **{h_meters:.1f} m** (Z trực thăng {P_yellow[2]} − Z mái nhà {P_red[2]}) × 1000")
-    st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**")
-    st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
-    st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**")
-    st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} km**")
+        st.write(f"- Chiều cao rơi thực tế: **{h_meters:.1f} m** (Z trực thăng {P_yellow[2]} − Z mái nhà {P_red[2]}) × 1000")
+        st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**")
+        st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
+        st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**")
+        st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} km**")
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
