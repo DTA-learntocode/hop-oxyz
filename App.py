@@ -308,8 +308,9 @@ with col_right:
     distance = np.linalg.norm(P_red - P_yellow)
     P_drop = np.array([P_red[0], P_red[1], P_yellow[2]])
     
-    h_meters = P_yellow[2] * 1000.0
-    t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
+   # Chiều cao rơi thực tế = độ cao trực thăng - độ cao mái nhà
+h_meters = max(0.0, (P_yellow[2] - P_red[2]) * 1000.0)
+t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
     d_ngang_km = (5.0 * t_fall) / 1000.0
     d_ngang_donvi = d_ngang_km
 
@@ -338,11 +339,11 @@ with col_right:
     st.info(f"Tọa độ điểm thả: `({P_release[0]:.2f}, {P_release[1]:.2f}, {P_release[2]})`")
     
     with st.expander("Chi tiết tính toán thả khi bay"):
-        st.write(f"- Chiều cao rơi: **{h_meters:.1f} m** (Z = {P_yellow[2]} × 1000)")
-        st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**")
-        st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
-        st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**")
-        st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} km**")
+    st.write(f"- Chiều cao rơi thực tế: **{h_meters:.1f} m** (Z trực thăng {P_yellow[2]} − Z mái nhà {P_red[2]}) × 1000")
+    st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**")
+    st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
+    st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**")
+    st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} km**")
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
