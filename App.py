@@ -309,8 +309,8 @@ with col_right:
     P_drop = np.array([P_red[0], P_red[1], P_yellow[2]])
     
    # Chiều cao rơi thực tế = độ cao trực thăng - độ cao mái nhà
-h_meters = max(0.0, (P_yellow[2] - P_red[2]) * 1000.0)
-t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
+    h_meters = max(0.0, (P_yellow[2] - P_red[2]) * 1000.0)
+    t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
     d_ngang_km = (5.0 * t_fall) / 1000.0
     d_ngang_donvi = d_ngang_km
 
