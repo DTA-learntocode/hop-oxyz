@@ -314,18 +314,22 @@ with col_right:
     # Chiều cao rơi thực tế = độ cao trực thăng - độ cao mái nhà
     h_meters = max(0.0, (P_yellow[2] - P_red[2]) * 1000.0)
     t_fall = np.sqrt(2 * h_meters / 9.8) if h_meters > 0 else 0.0
-    d_ngang_km = (5.0 * t_fall) / 1000.0
-    d_ngang_donvi = d_ngang_km
+    s = (5.0 * t_fall) / 1000.0   # quãng đường ngang cần có (s)
 
-    horiz = P_red[:2] - P_yellow[:2]
-    norm = np.linalg.norm(horiz)
+    # Vector từ trực thăng đến nhà (theo phương ngang)
+    dx = P_red[0] - P_yellow[0]
+    dy = P_red[1] - P_yellow[1]
+    d = np.sqrt(dx**2 + dy**2)   # khoảng cách ngang
 
-    if norm > 0:
-        release_xy = P_yellow[:2] + (horiz / norm) * min(d_ngang_donvi, norm)
+    if d > 1e-6:
+        # Công thức mới theo hình
+        Xc = P_red[0] - s * (dx / d)
+        Yc = P_red[1] - s * (dy / d)
     else:
-        release_xy = P_yellow[:2]
+        Xc = P_red[0]
+        Yc = P_red[1]
 
-    P_release = np.array([release_xy[0], release_xy[1], P_yellow[2]])
+    P_release = np.array([Xc, Yc, P_yellow[2]])
 
     st.markdown("---")
     st.subheader("Kết quả tính toán chi tiết")
@@ -345,8 +349,9 @@ with col_right:
         st.write(f"- Chiều cao rơi thực tế: **{h_meters:.1f} m** (Z trực thăng {P_yellow[2]} − Z mái nhà {P_red[2]}) × 1000")
         st.write(f"- Thời gian rơi tự do: **{t_fall:.2f} giây**")
         st.write(f"- Vận tốc bay ngang giả định: **5 m/s**")
-        st.write(f"- Quãng đường ngang cần có: **{d_ngang_km:.3f} km**")
-        st.write(f"- Khoảng cách ngang hiện tại: **{norm:.2f} km**")
+        st.write(f"- Quãng đường ngang cần có (s): **{s:.3f} km**")
+        st.write(f"- Khoảng cách ngang hiện tại (d): **{d:.2f} km**")
+        st.write(r"- Công thức: $X_C = X_{nhà} - s \times \dfrac{X_{nhà} - X_{tt}}{d}$")
 
     st.markdown("---")
     st.subheader("Mô hình 3D")
